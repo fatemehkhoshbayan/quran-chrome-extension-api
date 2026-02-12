@@ -1,14 +1,6 @@
-export interface VerseWord {
-  id: number;
-  position: number;
-  text_uthmani?: string;
-  text_imlaei?: string;
-  transliteration?: string;
-}
-
 export interface VerseAudio {
   url: string;
-  duration?: number;
+  segments?: Array<Array<number>>;
 }
 
 export interface VerseTranslation {
@@ -32,17 +24,5 @@ export interface Verse {
   page_number: number;
   juz_number: number;
   translations?: VerseTranslation[];
-
-  rub_number: number;
-  image_url?: string;
-  image_width?: number;
-
-  verse_index?: number;
-  code_v1?: string;
-  code_v2?: string;
-
-  v1_page?: number;
-  v2_page?: number;
-  words?: VerseWord[];
   audio?: VerseAudio;
 }

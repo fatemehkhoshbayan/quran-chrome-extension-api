@@ -114,7 +114,7 @@ export class QuranService {
         const response = await doRequest();
         return response.data;
       }
-      // Forward upstream API errors with real status and message (instead of 500)
+
       if (axios.isAxiosError(err) && err.response) {
         const upstreamStatus = err.response.status;
         const body = err.response.data as { message?: string } | undefined;
@@ -139,6 +139,7 @@ export class QuranService {
       method: 'GET',
       params: {
         fields: 'text_uthmani,chapter_id',
+        audio: '7',
         translations: '85',
         translation_fields: 'text,id,language_name',
       },
