@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { OAuthTokenResponse } from './interfaces/oauth.interface';
 import { Verse } from './interfaces/verse.interface';
+import { QURAN_CHAPTERS } from './constant';
 
 const CREDENTIALS_ERROR =
   'Missing Quran Foundation API credentials. Request access: https://api-docs.quran.foundation/request-access';
@@ -133,8 +134,12 @@ export class QuranService {
   // v4 endpoints
   // =====================
 
+  private attachChapterName(verse: Verse) {
+    verse.chapter_name = QURAN_CHAPTERS[verse.chapter_id] ?? '';
+  }
+
   async getRandomVerse(): Promise<{ verse: Verse }> {
-    return this.quranRequest<{ verse: Verse }>({
+    const response = await this.quranRequest<{ verse: Verse }>({
       url: '/verses/random',
       method: 'GET',
       params: {
@@ -144,6 +149,12 @@ export class QuranService {
         translation_fields: 'text,id,language_name',
       },
     });
+
+    if (response?.verse) {
+      this.attachChapterName(response.verse);
+    }
+
+    return response;
   }
 
   async getTranslations() {
@@ -161,10 +172,22 @@ export class QuranService {
     return response;
   }
 
-  async getVersesByKey(verseKey: number) {
-    return this.quranRequest({
+  async getVersesByKey(verseKey: string): Promise<{ verse: Verse }> {
+    const response = await this.quranRequest<{ verse: Verse }>({
       url: `/verses/by_key/${verseKey}`,
       method: 'GET',
+      params: {
+        fields: 'text_uthmani,chapter_id',
+        audio: '7',
+        translations: '85',
+        translation_fields: 'text,id,language_name',
+      },
     });
+
+    if (response?.verse) {
+      this.attachChapterName(response.verse);
+    }
+
+    return response;
   }
 }

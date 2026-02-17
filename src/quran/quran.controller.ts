@@ -39,9 +39,12 @@ export class QuranController {
     return this.quran.getChapter();
   }
 
-  @Get('verse/:key')
-  verses(@Param('id') id: string, @Headers('extension_secret') secret: string) {
+  @Get('verses/:key')
+  verses(
+    @Param('key') key: string,
+    @Headers('extension_secret') secret: string,
+  ) {
     this.validate(secret);
-    return this.quran.getVersesByKey(Number(id));
+    return this.quran.getVersesByKey(key);
   }
 }
