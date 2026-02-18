@@ -29,6 +29,7 @@ Create a `.env` file in the project root (do **not** commit real secrets to vers
 - **`CLIENT_ID`**: Quran Foundation API client ID.
 - **`CLIENT_SECRET`**: Quran Foundation API client secret.
 - **`EXTENSION_ID`**: Your Chrome extension ID (e.g. `abcdefghijklmnopabcdefghijklmnop`).
+- **`EXTENSION_SECRET`**: Shared secret your extension sends in the `extension_secret` header (any secure string you choose).
 
 Example:
 
@@ -36,7 +37,26 @@ Example:
 CLIENT_ID=your-quran-foundation-client-id
 CLIENT_SECRET=your-quran-foundation-client-secret
 EXTENSION_ID=your-chrome-extension-id
+EXTENSION_SECRET=your-shared-secret
 ```
+
+## Deploying to Vercel
+
+The app is set up to run as a single serverless function on [Vercel](https://vercel.com).
+
+1. **Push your code** to a Git repo (GitHub, GitLab, or Bitbucket) and [import the project in Vercel](https://vercel.com/new). Vercel will use the repo’s `vercel.json` and `package.json` build script.
+
+2. **Set environment variables** in the Vercel project:
+   - **Project → Settings → Environment Variables**
+   - Add: `CLIENT_ID`, `CLIENT_SECRET`, `EXTENSION_ID`, `EXTENSION_SECRET` (same values as in `.env`).
+
+3. **Deploy**: Each push to your main branch will trigger a deploy. Or run:
+   ```bash
+   npx vercel
+   ```
+   and follow the prompts (use `vercel --prod` for production).
+
+4. **Chrome extension**: Point your extension’s API base URL to your Vercel URL (e.g. `https://your-project.vercel.app`) and keep the same `EXTENSION_ID` and `extension_secret` header. CORS is already restricted to `chrome-extension://<EXTENSION_ID>`.
 
 ## Installation
 

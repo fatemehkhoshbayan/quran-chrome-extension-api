@@ -15,9 +15,19 @@ export class QuranService {
   private tokenExpiresAt: number | null = null;
   private tokenPending: Promise<string> | null = null;
 
-  private readonly OAUTH_URL = 'https://prelive-oauth2.quran.foundation';
+  // =====================
+  // Local
+  // =====================
+  // private readonly OAUTH_URL = 'https://prelive-oauth2.quran.foundation';
+  // private readonly CONTENT_BASE_URL =
+  //   'https://apis-prelive.quran.foundation/content/api/v4';
+
+  // =====================
+  // Production
+  // =====================
+  private readonly OAUTH_URL = 'https://oauth2.quran.foundation';
   private readonly CONTENT_BASE_URL =
-    'https://apis-prelive.quran.foundation/content/api/v4';
+    'https://apis.quran.foundation/content/api/v4';
 
   constructor(private config: ConfigService) {}
 
