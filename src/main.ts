@@ -46,6 +46,7 @@ export default async (
     await app.init();
     cachedApp = app.getHttpAdapter().getInstance() as Application;
   }
+  // Vercel passes the full path in req.url, so NestJS can route correctly
   cachedApp(req, res);
 };
 
