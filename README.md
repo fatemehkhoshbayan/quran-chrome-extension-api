@@ -93,14 +93,14 @@ Your Chrome extension should:
 - Include the required secret header (see next section).
 - Run with the same `EXTENSION_ID` that you configure on the server.
 
-> **Note**: The CORS configuration currently allows the header named `extension-secret`, while the controller reads `extension_secret`. Make sure the header name used by your extension matches what your controllers expect (you can align them by updating one side if needed).
+> **Note**: The CORS configuration currently allows the header named `extension-secret`, while the controller reads `extension-secret`. Make sure the header name used by your extension matches what your controllers expect (you can align them by updating one side if needed).
 
 ## Authentication
 
 All Quran-related endpoints require a shared secret header. The controller expects:
 
-- **Header name**: `extension_secret`
-- **Header value**: Must exactly match your `EXTENSION_SECRET` from `.env`
+- **Header name**: `extension-secret`
+- **Header value**: Must exactly match your `EXTENSION-SECRET` from `.env`
 
 If the header is missing or invalid, the API responds with `401 Unauthorized`.
 
@@ -111,7 +111,7 @@ All routes are prefixed with `/quran`.
 ### `GET /quran/random-verse`
 
 - **Headers**:
-  - `extension_secret: <EXTENSION_SECRET>`
+  - `extension-secret: <EXTENSION_SECRET>`
 - **Description**: Returns a random verse with basic fields and a translation.
 - **Query/body**: None.
 - **Response** (simplified):
@@ -121,7 +121,7 @@ All routes are prefixed with `/quran`.
 ### `GET /quran/translations`
 
 - **Headers**:
-  - `extension_secret: <EXTENSION_SECRET>`
+  - `extension-secret: <EXTENSION_SECRET>`
 - **Description**: Returns available translation resources from Quran Foundation.
 - **Query/body**: None.
 - **Response**: Direct pass-through of Quran Foundation translations resource.
@@ -129,7 +129,7 @@ All routes are prefixed with `/quran`.
 ### `GET /quran/chapters`
 
 - **Headers**:
-  - `extension_secret: <EXTENSION_SECRET>`
+  - `extension-secret: <EXTENSION_SECRET>`
 - **Description**: Returns metadata for all Quran chapters.
 - **Query/body**: None.
 - **Response**: Direct pass-through of Quran Foundation chapters resource.
@@ -137,7 +137,7 @@ All routes are prefixed with `/quran`.
 ### `GET /quran/verse/:key`
 
 - **Headers**:
-  - `extension_secret: <EXTENSION_SECRET>`
+  - `extension-secret: <EXTENSION_SECRET>`
 - **Route params**:
   - `key`: Numeric verse key (e.g. `1` for the first verse).
 - **Description**: Returns information for a specific verse by its numeric key.
