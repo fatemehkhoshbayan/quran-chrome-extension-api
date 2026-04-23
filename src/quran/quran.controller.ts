@@ -39,6 +39,21 @@ export class QuranController {
     return this.quran.getChapter();
   }
 
+  @Get('tafsirs')
+  tafsirs(@Headers('extension-secret') secret: string) {
+    this.validate(secret);
+    return this.quran.getTafsirResources();
+  }
+
+  @Get('tafsir/:key')
+  tafsir(
+    @Param('key') key: string,
+    @Headers('extension-secret') secret: string,
+  ) {
+    this.validate(secret);
+    return this.quran.getTafsirByVerseKey(key);
+  }
+
   @Get('verses/:key')
   verses(
     @Param('key') key: string,
