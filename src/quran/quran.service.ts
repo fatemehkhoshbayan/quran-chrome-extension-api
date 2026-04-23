@@ -2,7 +2,7 @@ import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import axios, { AxiosRequestConfig } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { OAuthTokenResponse } from './interfaces/oauth.interface';
-import { Verse } from './interfaces/verse.interface';
+import { Verse, ITafsir } from './interfaces/verse.interface';
 import { QURAN_CHAPTERS } from './constant';
 
 const CREDENTIALS_ERROR =
@@ -148,6 +148,29 @@ export class QuranService {
     verse.chapter_name = QURAN_CHAPTERS[verse.chapter_id] ?? '';
   }
 
+  async getTafsirResources() {
+    return this.quranRequest({
+      url: '/resources/tafsirs',
+      method: 'GET',
+    });
+  }
+
+  async getTafsirByVerseKey(verseKey: string) {
+    return this.quranRequest<{ tafsir: ITafsir }>({
+      url: `/tafsirs/169/by_ayah/${verseKey}`,
+      method: 'GET',
+    });
+  }
+
+  private async attachTafsir(verse: Verse) {
+    const tafsir: { tafsir: ITafsir } = await this.getTafsirByVerseKey(
+      verse.verse_key,
+    );
+    if (tafsir?.tafsir) {
+      verse.tafsir = tafsir.tafsir;
+    }
+  }
+
   async getRandomVerse(): Promise<{ verse: Verse }> {
     const response = await this.quranRequest<{ verse: Verse }>({
       url: '/verses/random',
@@ -162,6 +185,7 @@ export class QuranService {
 
     if (response?.verse) {
       this.attachChapterName(response.verse);
+      await this.attachTafsir(response.verse);
     }
 
     return response;
@@ -196,6 +220,7 @@ export class QuranService {
 
     if (response?.verse) {
       this.attachChapterName(response.verse);
+      await this.attachTafsir(response.verse);
     }
 
     return response;

@@ -6,7 +6,22 @@ export class TafsirController {
   constructor(private readonly tafsirService: TafsirService) {}
 
   @Post()
-  async getTafsir(@Body() body: { verseKey: string; text: string }) {
-    return this.tafsirService.getExplanation(body.verseKey, body.text);
+  async getTafsir(
+    @Body()
+    body: {
+      chapter_name: string;
+      verseKey: string;
+      text: string;
+      tafsirHtml: string;
+      question: string;
+    },
+  ) {
+    return this.tafsirService.getExplanation(
+      body.chapter_name,
+      body.verseKey,
+      body.text,
+      body.tafsirHtml,
+      body.question,
+    );
   }
 }
