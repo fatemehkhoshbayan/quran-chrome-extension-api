@@ -9,6 +9,11 @@ import { stripHtmlTags } from './utils/stripHtmlTags';
 const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3-next-80b-a3b-instruct:free';
 
+/** Short backoffs: long waits rarely help free-tier 429s; users prefer a fast error over ~30s of silence. */
+const GEMINI_RETRY_BASE_MS = 400;
+const OPENROUTER_RETRY_BASE_MS = 300;
+const OPENROUTER_RETRY_CAP_MS = 1_200;
+
 @Injectable()
 export class TafsirService {
   private genAI: GoogleGenerativeAI;
@@ -19,8 +24,20 @@ export class TafsirService {
   private readonly openRouterFallbackModel =
     process.env.OPENROUTER_FALLBACK_MODEL?.trim();
   private readonly openRouterApiKey = process.env.OPENROUTER_API_KEY?.trim();
+  /** When true (and OpenRouter is configured), try OpenRouter before Gemini — useful when Gemini free-tier daily quota is exhausted. */
+  private readonly openRouterFirst = this.parseTruthyEnv(
+    process.env.TAFSIR_OPENROUTER_FIRST,
+  );
   private readonly maxRetries = 2;
-  private readonly openRouterMaxRetries = 4;
+  /** 429/503: 3 attempts, ~0.3s + ~0.6s backoff between tries (plus network latency). */
+  private readonly openRouterMaxRetries = 2;
+
+  private parseTruthyEnv(value: string | undefined): boolean {
+    if (!value?.trim()) {
+      return false;
+    }
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+  }
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -95,7 +112,7 @@ export class TafsirService {
         ) {
           throw error;
         }
-        await this.sleep(700 * 2 ** attempt);
+        await this.sleep(GEMINI_RETRY_BASE_MS * 2 ** attempt);
       }
     }
 
@@ -130,7 +147,7 @@ export class TafsirService {
   }
 
   /**
-   * Retries on 429/503 — free models and shared keys are often briefly saturated.
+   * Retries on 429/503 with short backoff — brief upstream blips only; daily quotas still fail fast.
    */
   private async generateWithOpenRouter(
     prompt: string,
@@ -159,7 +176,11 @@ export class TafsirService {
           `OpenRouter request failed: ${res.status} ${res.statusText} ${lastBody.slice(0, 500)}`,
         );
       }
-      await this.sleep(2000 * 2 ** attempt);
+      const delay = Math.min(
+        OPENROUTER_RETRY_BASE_MS * 2 ** attempt,
+        OPENROUTER_RETRY_CAP_MS,
+      );
+      await this.sleep(delay);
     }
 
     throw new Error(`OpenRouter exhausted retries: ${lastBody.slice(0, 300)}`);
@@ -211,6 +232,36 @@ export class TafsirService {
     let geminiError: unknown;
     let geminiText: string | undefined;
 
+    const runOpenRouter = async (): Promise<{
+      explanation: string;
+      modelUsed: string;
+      generatedAt: string;
+    } | null> => {
+      if (!this.openRouterApiKey) {
+        return null;
+      }
+      try {
+        const { text, modelUsed } = await this.tryOpenRouterModels(prompt);
+        if (text.trim()) {
+          return {
+            explanation: text.trim(),
+            modelUsed,
+            generatedAt: new Date().toISOString(),
+          };
+        }
+      } catch (openRouterErr) {
+        console.error('OpenRouter error:', openRouterErr);
+      }
+      return null;
+    };
+
+    if (this.openRouterFirst) {
+      const fromOr = await runOpenRouter();
+      if (fromOr) {
+        return fromOr;
+      }
+    }
+
     try {
       geminiText = await this.generateWithGemini(prompt);
     } catch (error) {
@@ -227,25 +278,17 @@ export class TafsirService {
       };
     }
 
-    if (this.openRouterApiKey) {
-      try {
-        const { text, modelUsed } = await this.tryOpenRouterModels(prompt);
-        if (text.trim()) {
-          return {
-            explanation: text.trim(),
-            modelUsed,
-            generatedAt: new Date().toISOString(),
-          };
-        }
-      } catch (openRouterErr) {
-        console.error('OpenRouter fallback error:', openRouterErr);
+    if (this.openRouterApiKey && !this.openRouterFirst) {
+      const fromOr = await runOpenRouter();
+      if (fromOr) {
+        return fromOr;
       }
     }
 
     if (geminiError) {
       if (this.isTransientGeminiError(geminiError)) {
         throw new ServiceUnavailableException(
-          'Tafsir AI is rate-limited or temporarily unavailable. Gemini free tier has strict per-day limits (https://ai.google.dev/gemini-api/docs/rate-limits), and OpenRouter free models can return 429 when upstream is busy. Retry later, enable billing on Gemini for higher quotas, or set OPENROUTER_FALLBACK_MODEL to a paid or non-saturated OpenRouter model.',
+          'Tafsir AI is rate-limited. Retry later, enable Gemini billing, or set OPENROUTER_FALLBACK_MODEL / TAFSIR_OPENROUTER_FIRST. https://ai.google.dev/gemini-api/docs/rate-limits',
         );
       }
       throw new InternalServerErrorException('Failed to generate Tafsir');
