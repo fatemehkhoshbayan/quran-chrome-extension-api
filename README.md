@@ -13,7 +13,8 @@ Built with [NestJS](https://nestjs.com) and TypeScript.
 - **Chapters list**: Returns metadata for all Quran chapters.
 - **OAuth handling**: Manages Quran Foundation OAuth2 token acquisition, caching, and refresh.
 - **Chrome-extension–only CORS**: Only allows requests originating from your configured Chrome extension ID.
-- **Shared-secret header**: All Quran endpoints require a secret header to prevent arbitrary clients from calling the API.
+- **Shared-secret header**: Quran endpoints require a secret header to prevent arbitrary clients from calling the API.
+- **AI verse explanation (Tafsir)**: `POST /tafsir` uses Google **Gemini** first, then optionally **[OpenRouter](https://openrouter.ai/)** (default: [Qwen3 Next 80B free](https://openrouter.ai/qwen/qwen3-next-80b-a3b-instruct:free/api)) if Gemini errors or returns empty text, with retries on transient OpenRouter rate limits.
 
 ## Prerequisites
 
@@ -21,15 +22,27 @@ Built with [NestJS](https://nestjs.com) and TypeScript.
 - **npm**: v9+ (or yarn / pnpm if you prefer)
 - **Quran Foundation API credentials**: `CLIENT_ID` and `CLIENT_SECRET` from [Quran Foundation](https://api-docs.quran.foundation/request-access).
 - **Chrome Extension ID**: The ID of your Chrome extension that will call this API.
+- **Gemini API key**: Required for the app to start (`GEMINI_API_KEY`). Used for AI explanations on `/tafsir`. See [Google AI Studio](https://aistudio.google.com/apikey).
+- **OpenRouter** (optional): `OPENROUTER_API_KEY` enables a fallback when Gemini fails or returns no text. Free models can hit upstream rate limits; see [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) for Gemini and OpenRouter’s dashboard for usage.
 
 ## Environment variables
 
-Create a `.env` file in the project root (do **not** commit real secrets to version control in new projects) with the following keys:
+Create a `.env` file in the project root (do **not** commit real secrets to version control in new projects). Copy `.env.example` and fill in values.
+
+### Quran API and extension
 
 - **`CLIENT_ID`**: Quran Foundation API client ID.
 - **`CLIENT_SECRET`**: Quran Foundation API client secret.
 - **`EXTENSION_ID`**: Your Chrome extension ID (e.g. `abcdefghijklmnopabcdefghijklmnop`).
-- **`EXTENSION_SECRET`**: Shared secret your extension sends in the `extension_secret` header (any secure string you choose).
+- **`EXTENSION_SECRET`**: Shared secret your extension sends in the `extension-secret` header (any secure string you choose).
+
+### AI / Tafsir (`POST /tafsir`)
+
+- **`GEMINI_API_KEY`** (required): Google Generative AI API key. The server will not boot without it.
+- **`GEMINI_MODEL`** (optional): Gemini model id. Default: `gemini-2.5-flash`. Free tier has low per-day quotas; enable billing on Google Cloud for higher limits if needed.
+- **`OPENROUTER_API_KEY`** (optional): [OpenRouter](https://openrouter.ai/) API key. When set, the service retries OpenRouter on `429`/`503`, then optionally tries a second model.
+- **`OPENROUTER_MODEL`** (optional): OpenRouter model slug. Default: `qwen/qwen3-next-80b-a3b-instruct:free`.
+- **`OPENROUTER_FALLBACK_MODEL`** (optional): If the primary OpenRouter model fails after retries, this model is tried once (use a paid or less congested slug from [OpenRouter models](https://openrouter.ai/models)).
 
 Example:
 
@@ -38,6 +51,13 @@ CLIENT_ID=your-quran-foundation-client-id
 CLIENT_SECRET=your-quran-foundation-client-secret
 EXTENSION_ID=your-chrome-extension-id
 EXTENSION_SECRET=your-shared-secret
+
+GEMINI_API_KEY=your-gemini-api-key
+# GEMINI_MODEL=gemini-2.5-flash
+
+OPENROUTER_API_KEY=your-openrouter-key
+# OPENROUTER_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
+# OPENROUTER_FALLBACK_MODEL=openai/gpt-4o-mini
 ```
 
 ## Deploying to Vercel
@@ -48,7 +68,8 @@ The app is set up to run as a single serverless function on [Vercel](https://ver
 
 2. **Set environment variables** in the Vercel project:
    - **Project → Settings → Environment Variables**
-   - Add: `CLIENT_ID`, `CLIENT_SECRET`, `EXTENSION_ID`, `EXTENSION_SECRET` (same values as in `.env`).
+   - Add at minimum: `CLIENT_ID`, `CLIENT_SECRET`, `EXTENSION_ID`, `EXTENSION_SECRET`, `GEMINI_API_KEY`.
+   - For OpenRouter fallback: `OPENROUTER_API_KEY`, and optionally `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODEL`.
 
 3. **Deploy**: Each push to your main branch will trigger a deploy. Or run:
    ```bash
@@ -56,7 +77,7 @@ The app is set up to run as a single serverless function on [Vercel](https://ver
    ```
    and follow the prompts (use `vercel --prod` for production).
 
-4. **Chrome extension**: Point your extension’s API base URL to your Vercel URL (e.g. `https://your-project.vercel.app`) and keep the same `EXTENSION_ID` and `extension_secret` header. CORS is already restricted to `chrome-extension://<EXTENSION_ID>`.
+4. **Chrome extension**: Point your extension’s API base URL to your Vercel URL (e.g. `https://your-project.vercel.app`) and keep the same `EXTENSION_ID` and `extension-secret` header on Quran routes. CORS is already restricted to `chrome-extension://<EXTENSION_ID>`.
 
 ## Installation
 
@@ -93,20 +114,20 @@ Your Chrome extension should:
 - Include the required secret header (see next section).
 - Run with the same `EXTENSION_ID` that you configure on the server.
 
-> **Note**: The CORS configuration currently allows the header named `extension-secret`, while the controller reads `extension-secret`. Make sure the header name used by your extension matches what your controllers expect (you can align them by updating one side if needed).
+> **Note**: Send the header name **`extension-secret`** (lowercase, kebab-case). Its value must match **`EXTENSION_SECRET`** from your environment.
 
 ## Authentication
 
 All Quran-related endpoints require a shared secret header. The controller expects:
 
 - **Header name**: `extension-secret`
-- **Header value**: Must exactly match your `EXTENSION-SECRET` from `.env`
+- **Header value**: Must exactly match **`EXTENSION_SECRET`** from `.env`
 
 If the header is missing or invalid, the API responds with `401 Unauthorized`.
 
 ## API endpoints
 
-All routes are prefixed with `/quran`.
+Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** (separate path).
 
 ### `GET /quran/random-verse`
 
@@ -143,6 +164,22 @@ All routes are prefixed with `/quran`.
 - **Description**: Returns information for a specific verse by its numeric key.
 - **Response**: Verse data from Quran Foundation.
 
+### `POST /tafsir`
+
+- **Headers**: `Content-Type: application/json` (CORS allows `extension-secret` for consistency; this route does not validate the extension secret in code today).
+- **Body** (JSON):
+  - `chapter_name` (string)
+  - `verseKey` (string)
+  - `text` (string) — verse text
+  - `tafsirHtml` (string) — HTML tafsir context
+  - `question` (string) — user question (can be empty)
+- **Description**: Returns a short grounded explanation. Tries **Gemini** first; if that fails or returns no text and `OPENROUTER_API_KEY` is set, tries **OpenRouter** with retries, then optional `OPENROUTER_FALLBACK_MODEL`.
+- **Response** (JSON):
+  - `explanation` (string)
+  - `modelUsed` (string) — Gemini model id or OpenRouter model slug that produced the answer
+  - `generatedAt` (string, ISO 8601)
+- **Errors**: `503` when both providers are rate-limited or temporarily unavailable; `500` for other generation failures.
+
 ## Quran Foundation integration details
 
 Internally, the service:
@@ -158,17 +195,8 @@ You do **not** need to handle any of this in your Chrome extension; it only talk
 
 ## Testing
 
-Standard NestJS test scripts are available:
-
 ```bash
-# unit tests
 npm run test
-
-# e2e tests
-npm run test:e2e
-
-# coverage
-npm run test:cov
 ```
 
 ## License
