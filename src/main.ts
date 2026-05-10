@@ -6,24 +6,45 @@ import type { Application } from 'express';
 
 let cachedApp: Application | null = null;
 
+function parseExtensionIds(raw: string | undefined): string[] {
+  if (!raw?.trim()) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 function setupApp(app: INestApplication) {
   const config = app.get(ConfigService);
-  const extensionId = config.get<string>('EXTENSION_ID');
+  const extensionIds = parseExtensionIds(config.get<string>('EXTENSION_ID'));
+  const firstAllowedOrigin =
+    extensionIds.length > 0
+      ? `chrome-extension://${extensionIds[0]}`
+      : undefined;
 
   app.enableCors({
     origin: (
       origin: string | undefined,
-      cb: (err: Error | null, allowedOrigin?: string) => void,
+      cb: (err: Error | null, allowedOrigin?: string | boolean) => void,
     ) => {
-      const allowedOrigin = `chrome-extension://${extensionId}`;
-      if (!origin || origin === allowedOrigin) {
-        cb(null, allowedOrigin);
+      if (!origin) {
+        cb(null, firstAllowedOrigin ?? false);
+        return;
+      }
+      const matchedId = extensionIds.find(
+        (id) => origin === `chrome-extension://${id}`,
+      );
+      if (matchedId) {
+        cb(null, `chrome-extension://${matchedId}`);
       } else {
         cb(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'extension-secret'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'extension-secret', 'Accept'],
+    maxAge: 86400,
   });
 }
 

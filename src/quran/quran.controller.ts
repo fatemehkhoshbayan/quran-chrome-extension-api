@@ -16,7 +16,7 @@ export class QuranController {
   ) {}
 
   private validate(secret?: string) {
-    if (secret !== this.config.get('EXTENSION-SECRET')) {
+    if (secret !== this.config.get<string>('EXTENSION_SECRET')) {
       throw new UnauthorizedException();
     }
   }
