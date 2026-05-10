@@ -17,7 +17,7 @@ Product planning and upcoming work for the Daily Quran extension and this API: [
 - **Chapters list**: Returns metadata for all Quran chapters.
 - **OAuth handling**: Manages Quran Foundation OAuth2 token acquisition, caching, and refresh.
 - **Chrome-extension–only CORS**: Only allows requests originating from your configured Chrome extension ID.
-- **Shared-secret header**: Quran endpoints require an `extension-secret` header to prevent arbitrary clients from calling the API. (`POST /tafsir` does not require the header today; sending it is optional for CORS preflight consistency.)
+- **Shared-secret header**: Quran endpoints require an `extension_secret` header to prevent arbitrary clients from calling the API. (`POST /tafsir` does not require the header today; sending it is optional for CORS preflight consistency.)
 - **AI verse explanation (Tafsir)**: `POST /tafsir` uses Google **Gemini** first, then optionally **[OpenRouter](https://openrouter.ai/)** (default: [Qwen3 Next 80B free](https://openrouter.ai/qwen/qwen3-next-80b-a3b-instruct:free/api)) if Gemini errors or returns empty text, with retries on transient OpenRouter rate limits.
 
 ## Prerequisites
@@ -38,7 +38,7 @@ Create a `.env` file in the project root (do **not** commit real secrets to vers
 - **`CLIENT_ID`**: Quran Foundation API client ID.
 - **`CLIENT_SECRET`**: Quran Foundation API client secret.
 - **`EXTENSION_ID`**: Your Chrome extension ID (32 characters). For a [Chrome Web Store](https://chromewebstore.google.com/) listing, use the ID from the listing URL (the segment after the final `/`). Example (Daily Quran): `diilngbfimlnkdbabjhadnblkhfbfcge`. You may set a comma-separated list (e.g. unpacked dev ID and Store ID) so both can call the same API without changing deploys.
-- **`EXTENSION_SECRET`**: Shared secret your extension sends in the `extension-secret` header (any secure string you choose).
+- **`EXTENSION_SECRET`**: Shared secret your extension sends in the `extension_secret` header (any secure string you choose).
 
 ### AI / Tafsir (`POST /tafsir`)
 
@@ -81,7 +81,7 @@ The app is set up to run as a single serverless function on [Vercel](https://ver
    ```
    and follow the prompts (use `vercel --prod` for production).
 
-4. **Chrome extension**: In Vercel, set **`EXTENSION_ID`** to your published extension’s Store ID (for [Daily Quran](https://chromewebstore.google.com/detail/daily-quran/diilngbfimlnkdbabjhadnblkhfbfcge), use `diilngbfimlnkdbabjhadnblkhfbfcge`). Point the extension’s API base URL to your Vercel URL and send **`extension-secret`** on **Quran** routes. Redeploy after changing `EXTENSION_ID`. CORS allows only `chrome-extension://` origins for the configured ID(s).
+4. **Chrome extension**: In Vercel, set **`EXTENSION_ID`** to your published extension’s Store ID (for [Daily Quran](https://chromewebstore.google.com/detail/daily-quran/diilngbfimlnkdbabjhadnblkhfbfcge), use `diilngbfimlnkdbabjhadnblkhfbfcge`). Point the extension’s API base URL to your Vercel URL and send **`extension_secret`** on **Quran** routes. Redeploy after changing `EXTENSION_ID`. CORS allows only `chrome-extension://` origins for the configured ID(s).
 
 ## Installation
 
@@ -110,7 +110,7 @@ In `main.ts`, CORS is configured to:
 
 - Allow **only** origins `chrome-extension://<id>` for each comma-separated value in **`EXTENSION_ID`** (e.g. one Store listing ID for every user of that listing, or `devId,storeId` for local unpacked plus production).
 - Allow HTTP methods: `GET`, `POST`, and `OPTIONS` (preflight).
-- Allow request headers: `Content-Type`, `extension-secret`, and `Accept`.
+- Allow request headers: `Content-Type`, `extension_secret`, and `Accept`.
 - Cache preflight responses for up to 24 hours (`maxAge`).
 
 **Important — where `fetch` runs:** Requests from your extension **popup, options page, or service worker** send `Origin: chrome-extension://<your-extension-id>`, which matches the allowlist above. A **`fetch` from a content script** injected on a normal `https://` page often sends that **page’s** origin instead, so the API will reject it by design. If you need to call the API from a content script, perform `fetch` in the **service worker** (or extension page) and use **`chrome.runtime.sendMessage`** from the content script to ask the worker to call the API (see [Extension: API calls from content scripts](#extension-api-calls-from-content-scripts) below).
@@ -118,10 +118,10 @@ In `main.ts`, CORS is configured to:
 Your Chrome extension should:
 
 - Make requests to `http://localhost:3000` (or your Vercel URL in production).
-- Include the required **`extension-secret`** header on Quran routes (see next section). You may also send it on `POST /tafsir` if you want; the server does not validate it on that route yet.
+- Include the required **`extension_secret`** header on Quran routes (see next section). You may also send it on `POST /tafsir` if you want; the server does not validate it on that route yet.
 - Use an **`EXTENSION_ID`** on the server that matches the extension build users install (Web Store ID for published builds).
 
-> **Note**: Send the header name **`extension-secret`** (lowercase, kebab-case). Its value must match **`EXTENSION_SECRET`** from your environment.
+> **Note**: Send the header name **`extension_secret`** (lowercase, underscore). Its value must match **`EXTENSION_SECRET`** from your environment.
 
 #### Extension: API calls from content scripts
 
@@ -131,12 +131,12 @@ This repository is the API only. If Network shows `Origin: https://...` (the web
 
 All Quran-related endpoints require a shared secret header. The controller expects:
 
-- **Header name**: `extension-secret`
+- **Header name**: `extension_secret`
 - **Header value**: Must exactly match **`EXTENSION_SECRET`** from `.env`
 
 If the header is missing or invalid, the API responds with `401 Unauthorized`.
 
-**`POST /tafsir`** does not validate `extension-secret` today (backward compatible with older extension clients). A future release may require the same header as Quran routes; see the [roadmap](https://trello.com/b/C6AHrqBZ/daily-quran-roadmap).
+**`POST /tafsir`** does not validate `extension_secret` today (backward compatible with older extension clients). A future release may require the same header as Quran routes; see the [roadmap](https://trello.com/b/C6AHrqBZ/daily-quran-roadmap).
 
 ## API endpoints
 
@@ -145,7 +145,7 @@ Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** 
 ### `GET /quran/random-verse`
 
 - **Headers**:
-  - `extension-secret: <EXTENSION_SECRET>`
+  - `extension_secret: <EXTENSION_SECRET>`
 - **Description**: Returns a random verse with basic fields and a translation.
 - **Query/body**: None.
 - **Response** (simplified):
@@ -155,7 +155,7 @@ Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** 
 ### `GET /quran/translations`
 
 - **Headers**:
-  - `extension-secret: <EXTENSION_SECRET>`
+  - `extension_secret: <EXTENSION_SECRET>`
 - **Description**: Returns available translation resources from Quran Foundation.
 - **Query/body**: None.
 - **Response**: Direct pass-through of Quran Foundation translations resource.
@@ -163,7 +163,7 @@ Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** 
 ### `GET /quran/chapters`
 
 - **Headers**:
-  - `extension-secret: <EXTENSION_SECRET>`
+  - `extension_secret: <EXTENSION_SECRET>`
 - **Description**: Returns metadata for all Quran chapters.
 - **Query/body**: None.
 - **Response**: Direct pass-through of Quran Foundation chapters resource.
@@ -171,7 +171,7 @@ Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** 
 ### `GET /quran/verse/:key`
 
 - **Headers**:
-  - `extension-secret: <EXTENSION_SECRET>`
+  - `extension_secret: <EXTENSION_SECRET>`
 - **Route params**:
   - `key`: Numeric verse key (e.g. `1` for the first verse).
 - **Description**: Returns information for a specific verse by its numeric key.
@@ -181,7 +181,7 @@ Quran data routes live under **`/quran`**. AI explanation is **`POST /tafsir`** 
 
 - **Headers**:
   - `Content-Type: application/json`
-  - `extension-secret` (optional today; not validated on the server — CORS still allows this header name for clients that send it)
+  - `extension_secret` (optional today; not validated on the server — CORS still allows this header name for clients that send it)
 - **Body** (JSON):
   - `chapter_name` (string)
   - `verseKey` (string)

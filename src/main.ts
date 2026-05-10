@@ -43,7 +43,7 @@ function setupApp(app: INestApplication) {
       }
     },
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'extension-secret', 'Accept'],
+    allowedHeaders: ['Content-Type', 'extension_secret', 'Accept'],
     maxAge: 86400,
   });
 }

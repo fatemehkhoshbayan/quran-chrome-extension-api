@@ -22,25 +22,25 @@ export class QuranController {
   }
 
   @Get('random-verse')
-  randomVerse(@Headers('extension-secret') secret: string) {
+  randomVerse(@Headers('extension_secret') secret: string) {
     this.validate(secret);
     return this.quran.getRandomVerse();
   }
 
   @Get('translations')
-  translations(@Headers('extension-secret') secret: string) {
+  translations(@Headers('extension_secret') secret: string) {
     this.validate(secret);
     return this.quran.getTranslations();
   }
 
   @Get('chapters')
-  chapter(@Headers('extension-secret') secret: string) {
+  chapter(@Headers('extension_secret') secret: string) {
     this.validate(secret);
     return this.quran.getChapter();
   }
 
   @Get('tafsirs')
-  tafsirs(@Headers('extension-secret') secret: string) {
+  tafsirs(@Headers('extension_secret') secret: string) {
     this.validate(secret);
     return this.quran.getTafsirResources();
   }
@@ -48,7 +48,7 @@ export class QuranController {
   @Get('tafsir/:key')
   tafsir(
     @Param('key') key: string,
-    @Headers('extension-secret') secret: string,
+    @Headers('extension_secret') secret: string,
   ) {
     this.validate(secret);
     return this.quran.getTafsirByVerseKey(key);
@@ -57,7 +57,7 @@ export class QuranController {
   @Get('verses/:key')
   verses(
     @Param('key') key: string,
-    @Headers('extension-secret') secret: string,
+    @Headers('extension_secret') secret: string,
   ) {
     this.validate(secret);
     return this.quran.getVersesByKey(key);
