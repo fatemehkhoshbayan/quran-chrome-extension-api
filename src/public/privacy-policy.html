@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy — Daily Quran</title>
+    <meta
+      name="description"
+      content="Privacy Policy for the Daily Quran Chrome extension and its backend API."
+    />
+    <style>
+      :root {
+        --fg: #1f2937;
+        --muted: #4b5563;
+        --bg: #ffffff;
+        --accent: #0f766e;
+        --border: #e5e7eb;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+          Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.65;
+        font-size: 16px;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+      header {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 16px;
+        margin-bottom: 32px;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 8px;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin: 32px 0 8px;
+        color: var(--accent);
+      }
+      p, li { color: var(--fg); }
+      .muted { color: var(--muted); font-size: 0.95rem; }
+      ul { padding-left: 22px; }
+      li { margin: 6px 0; }
+      a { color: var(--accent); }
+      code {
+        background: #f3f4f6;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.92em;
+      }
+      footer {
+        margin-top: 48px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Privacy Policy</h1>
+        <p class="muted">
+          <strong>AI-Powered Daily Quran</strong> Chrome extension and its supporting API.<br />
+          Last updated: May 13, 2026
+        </p>
+      </header>
+
+      <p>
+        This Privacy Policy explains what information the
+        <strong>AI-Powered Daily Quran</strong> Chrome extension (the “Extension”) and its
+        supporting backend service (together, the “Service”) collect, how it is
+        used, and the choices you have. We have designed the Service to collect
+        the minimum amount of information necessary to display verses of the
+        Holy Qurʼān and related explanations.
+      </p>
+
+      <h2>1. Information we do not collect</h2>
+      <ul>
+        <li>We do not require you to create an account or sign in.</li>
+        <li>
+          We do not collect your name, email address, phone number, IP address,
+          location, browsing history, or any other personally identifiable
+          information (“PII”).
+        </li>
+        <li>
+          We do not use cookies, advertising identifiers, analytics SDKs, or
+          third-party tracking pixels.
+        </li>
+        <li>We do not sell, rent, or share any user data with third parties.</li>
+      </ul>
+
+      <h2>2. Information stored locally on your device</h2>
+      <p>
+        The Extension may use the browser’s
+        <code>chrome.storage</code> API to remember your preferences (for
+        example: preferred translation, last viewed verse, UI settings). This
+        data is stored on your device only and is never transmitted to our
+        servers.
+      </p>
+
+      <h2>3. Information processed by our backend</h2>
+      <p>
+        When the Extension requests a verse, translation, chapter list, or AI
+        explanation, it sends a request to our backend API. These requests
+        include only:
+      </p>
+      <ul>
+        <li>
+          The verse or chapter identifier you are requesting (for example,
+          <code>2:255</code>).
+        </li>
+        <li>
+          For the explanation endpoint (<code>POST /tafsir</code>) only: the
+          verse text, the optional question you typed, and a tafsir excerpt
+          used as context for the AI model.
+        </li>
+        <li>
+          A shared <code>extension_secret</code> header used to prevent
+          unauthorized clients from abusing the API.
+        </li>
+        <li>
+          The <code>chrome-extension://&lt;id&gt;</code> origin sent by your
+          browser for CORS verification.
+        </li>
+      </ul>
+      <p>
+        Request and response payloads are processed in memory to fulfil your
+        request and are not persisted in a database or logged with identifying
+        information. Standard, short-lived platform logs (for example, on our
+        hosting provider) may temporarily contain the request URL and HTTP
+        status code for security and reliability purposes; these logs do not
+        contain personal information and are rotated automatically.
+      </p>
+
+      <h2>4. Third-party services</h2>
+      <p>
+        To deliver the Service, our backend forwards your request to the
+        following third parties. We do not share any personal information with
+        them, and we only send the data strictly necessary for the feature you
+        used:
+      </p>
+      <ul>
+        <li>
+          <strong>Quran.Foundation Content API</strong> — used to retrieve
+          Qurʼānic verses, translations, tafsir, and chapter metadata.
+          See the
+          <a href="https://quran.foundation/privacy-policy" target="_blank" rel="noopener">
+            Quran.Foundation Privacy Policy</a>.
+        </li>
+        <li>
+          <strong>Google Gemini API</strong> — used to generate short
+          AI-assisted explanations of the requested verse. Only the verse text,
+          tafsir context, and your optional question are sent. See the
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">
+            Google Privacy Policy</a>.
+        </li>
+        <li>
+          <strong>OpenRouter (fallback)</strong> — used only when Gemini is
+          unavailable or rate-limited, with the same minimal payload as above.
+          See the
+          <a href="https://openrouter.ai/privacy" target="_blank" rel="noopener">
+            OpenRouter Privacy Policy</a>.
+        </li>
+      </ul>
+      <p>
+        These providers may process the content of your request in accordance
+        with their own terms. Please review their policies for details on how
+        they handle data.
+      </p>
+
+      <h2>5. Permissions used by the Chrome extension</h2>
+      <p>
+        The Extension requests only the minimum browser permissions needed for
+        its features (for example, <code>storage</code> to remember your
+        preferences and <code>host_permissions</code> for our API host). It
+        does not read or modify the content of web pages you visit, and it does
+        not access your browsing history.
+      </p>
+
+      <h2>6. Children’s privacy</h2>
+      <p>
+        The Service is suitable for general audiences and does not knowingly
+        collect personal information from children. If you believe a child has
+        provided us with information, please contact us so we can promptly
+        remove it.
+      </p>
+
+      <h2>7. Data security</h2>
+      <p>
+        All communication between the Extension and our backend is performed
+        over HTTPS. The backend restricts access to requests originating from
+        the configured Chrome extension ID and validates a shared secret on
+        Quran data endpoints.
+      </p>
+
+      <h2>8. Your choices</h2>
+      <ul>
+        <li>
+          You can remove all locally stored preferences by uninstalling the
+          Extension or clearing its storage from
+          <code>chrome://extensions</code>.
+        </li>
+        <li>
+          Because we do not maintain user accounts or personal records, there
+          is no separate account to delete on our side.
+        </li>
+      </ul>
+
+      <h2>9. Changes to this Policy</h2>
+      <p>
+        We may update this Privacy Policy from time to time. Material changes
+        will be reflected by updating the “Last updated” date at the top of
+        this page. Continued use of the Service after changes constitutes
+        acceptance of the revised policy.
+      </p>
+
+      <h2>10. Contact</h2>
+      <p>
+        For privacy questions, requests, or concerns, please contact:
+        <br />
+        <a href="mailto:f.khoshbayan@gmail.com">f.khoshbayan@gmail.com</a>
+      </p>
+
+      <footer>
+        © 2026 Daily Quran. This page is provided for transparency and to
+        comply with the requirements of the Quran.Foundation API access
+        program.
+      </footer>
+    </main>
+  </body>
+</html>
