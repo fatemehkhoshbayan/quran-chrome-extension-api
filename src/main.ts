@@ -42,8 +42,8 @@ function setupApp(app: INestApplication) {
         cb(new Error('Not allowed by CORS'));
       }
     },
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'extension_secret', 'Accept'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'extension_secret', 'Accept', 'x-session-token'],
     maxAge: 86400,
   });
 }
