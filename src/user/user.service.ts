@@ -9,6 +9,18 @@ interface BookmarkBody {
   group: string;
 }
 
+export interface Bookmark {
+  id: string;
+  key: number;
+  verseNumber: number;
+}
+
+interface QfBookmarksResponse {
+  data?: {
+    bookmarks?: Bookmark[];
+  };
+}
+
 @Injectable()
 export class UserService {
   constructor(private readonly oauthService: QfOAuthService) {}
@@ -33,11 +45,11 @@ export class UserService {
 
   async getBookmarks(accessToken: string) {
     try {
-      const response = await axios.get(
-        `${this.oauthService.userApiBase}/v1/bookmarks?type=ayah`,
+      const response = await axios.get<QfBookmarksResponse>(
+        `${this.oauthService.userApiBase}/v1/collections/__default__/bookmarks`,
         { headers: this.headers(accessToken) },
       );
-      return response.data;
+      return { bookmarks: response.data.data?.bookmarks ?? [] };
     } catch (err) {
       this.handleError(err, 'getBookmarks');
     }
@@ -56,12 +68,12 @@ export class UserService {
     };
 
     try {
-      const response = await axios.post(
+      await axios.post(
         `${this.oauthService.userApiBase}/v1/collections/__default__/bookmarks`,
         body,
         { headers: this.headers(accessToken) },
       );
-      return response.data;
+      return { id: `${key}:${verseNumber}`, key, verseNumber };
     } catch (err) {
       this.handleError(err, 'addBookmark');
     }
