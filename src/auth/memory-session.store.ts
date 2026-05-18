@@ -1,4 +1,9 @@
-import { ISessionStore, PkceState, SessionData } from './session.store';
+import {
+  ISessionStore,
+  PkceState,
+  SessionData,
+  SessionPickup,
+} from './session.store';
 
 interface Entry<T> {
   value: T;
@@ -12,7 +17,7 @@ interface Entry<T> {
 export class MemorySessionStore implements ISessionStore {
   private readonly pkce = new Map<string, Entry<PkceState>>();
   private readonly sessions = new Map<string, Entry<SessionData>>();
-  private readonly extStateMap = new Map<string, Entry<string>>();
+  private readonly extStateMap = new Map<string, Entry<SessionPickup>>();
 
   private set<T>(map: Map<string, Entry<T>>, key: string, value: T, ttlMs: number): void {
     map.set(key, { value, expiresAt: Date.now() + ttlMs });
@@ -52,18 +57,23 @@ export class MemorySessionStore implements ISessionStore {
     this.sessions.delete(`session:${sessionId}`);
   }
 
-  async setExtStateToSession(extState: string, sessionId: string): Promise<void> {
-    this.set(this.extStateMap, `extstate:${extState}`, sessionId, 10 * 60 * 1000);
+  async setExtStateToSession(
+    extState: string,
+    sessionId: string,
+    session: SessionData,
+  ): Promise<void> {
+    this.set(
+      this.extStateMap,
+      `extstate:${extState}`,
+      { sessionId, session },
+      10 * 60 * 1000,
+    );
   }
 
-  async getExtStateToSession(extState: string): Promise<string | null> {
-    return this.get(this.extStateMap, `extstate:${extState}`);
-  }
-
-  async consumeExtStateToSession(extState: string): Promise<string | null> {
+  async consumeExtStateToSession(extState: string): Promise<SessionPickup | null> {
     const key = `extstate:${extState}`;
-    const sessionId = this.get(this.extStateMap, key);
-    if (sessionId) this.extStateMap.delete(key);
-    return sessionId;
+    const pickup = this.get(this.extStateMap, key);
+    if (pickup) this.extStateMap.delete(key);
+    return pickup;
   }
 }

@@ -63,6 +63,34 @@ export class QfOAuthService {
     this.clientSecret =
       config.get<string>('QF_USER_CLIENT_SECRET') ?? config.get<string>('CLIENT_SECRET') ?? '';
     this.redirectUri = config.get<string>('QF_USER_REDIRECT_URI') ?? '';
+
+    console.info('[QF OAuth] Config loaded', {
+      authHost: this.safeHost(this.authBaseUrl),
+      apiHost: this.safeHost(this.apiBaseUrl),
+      redirectUriConfigured: Boolean(this.redirectUri),
+      redirectUri: this.redirectUri || '<missing>',
+      clientIdConfigured: Boolean(this.clientId),
+      clientSecretConfigured: Boolean(this.clientSecret),
+    });
+  }
+
+  private safeHost(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return '<invalid-url>';
+    }
+  }
+
+  getDiagnostics() {
+    return {
+      authHost: this.safeHost(this.authBaseUrl),
+      apiHost: this.safeHost(this.apiBaseUrl),
+      redirectUriConfigured: Boolean(this.redirectUri),
+      redirectUri: this.redirectUri || '<missing>',
+      clientIdConfigured: Boolean(this.clientId),
+      clientSecretConfigured: Boolean(this.clientSecret),
+    };
   }
 
   /**
@@ -76,6 +104,11 @@ export class QfOAuthService {
 
     const pkceData: PkceState = { oauthState, nonce, codeVerifier };
     await this.store.setPkceState(extState, pkceData);
+
+    console.info('[QF OAuth] Starting login', {
+      extState: this.shortId(extState),
+      ...this.getDiagnostics(),
+    });
 
     // Encode both oauthState and extState in the state param as "<oauthState>.<extState>"
     // so the callback can recover the extState without a separate lookup.
@@ -93,6 +126,10 @@ export class QfOAuthService {
     });
 
     return `${this.authBaseUrl}/oauth2/auth?${params.toString()}`;
+  }
+
+  private shortId(value: string): string {
+    return value ? `${value.slice(0, 8)}…` : '<missing>';
   }
 
   /**
@@ -117,6 +154,13 @@ export class QfOAuthService {
     if (pkce.oauthState !== oauthState) throw new Error('OAuth state mismatch (CSRF check failed)');
 
     await this.store.delPkceState(extState);
+
+    console.info('[QF OAuth] Exchanging authorization code', {
+      extState: this.shortId(extState),
+      oauthState: this.shortId(oauthState),
+      authHost: this.safeHost(this.authBaseUrl),
+      redirectUri: this.redirectUri || '<missing>',
+    });
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -184,6 +228,11 @@ export class QfOAuthService {
     );
 
     const { access_token, refresh_token, expires_in } = response.data;
+
+    console.info('[QF OAuth] Refreshed user access token', {
+      expiresInSeconds: expires_in,
+      authHost: this.safeHost(this.authBaseUrl),
+    });
 
     return {
       accessToken: access_token,

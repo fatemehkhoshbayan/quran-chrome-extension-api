@@ -31,17 +31,30 @@ export class SessionAuthGuard implements CanActivate {
     if (!sessionToken) throw new UnauthorizedException('x-session-token header required');
 
     const session = await this.store.getSession(sessionToken);
-    if (!session) throw new UnauthorizedException('Invalid or expired session');
+    if (!session) {
+      console.warn('[QF Auth] Session token not found', {
+        sessionId: this.shortId(sessionToken),
+      });
+      throw new UnauthorizedException('Invalid or expired session');
+    }
 
     // Proactively refresh QF access token if close to expiry
     if (Date.now() >= session.accessTokenExpiresAt - REFRESH_BUFFER_MS) {
       try {
+        console.info('[QF Auth] Refreshing QF access token', {
+          sessionId: this.shortId(sessionToken),
+          expiresAt: new Date(session.accessTokenExpiresAt).toISOString(),
+        });
         const refreshed = await this.oauthService.refreshAccessToken(session.refreshToken);
         const updated = { ...session, ...refreshed };
         await this.store.setSession(sessionToken, updated);
         req.sessionId = sessionToken;
         req.sessionData = updated;
-      } catch {
+      } catch (error) {
+        console.warn('[QF Auth] QF access token refresh failed; using existing session if still valid', {
+          sessionId: this.shortId(sessionToken),
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
         // Refresh failed — session is still usable if token hasn't expired yet
         req.sessionId = sessionToken;
         req.sessionData = session;
@@ -52,5 +65,9 @@ export class SessionAuthGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  private shortId(value: string): string {
+    return value ? `${value.slice(0, 8)}…` : '<missing>';
   }
 }

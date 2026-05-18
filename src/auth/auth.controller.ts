@@ -7,7 +7,6 @@ import {
   Headers,
   Res,
   UnauthorizedException,
-  NotFoundException,
   BadRequestException,
   Inject,
 } from '@nestjs/common';
@@ -50,6 +49,10 @@ export class AuthController {
     if (!extState) throw new BadRequestException('state query param required');
 
     const url = await this.oauthService.buildAuthorizeUrl(extState);
+    console.info('[QF Auth] Redirecting to OAuth provider', {
+      extState: this.shortId(extState),
+      diagnostics: this.oauthService.getDiagnostics(),
+    });
     res.redirect(302, url);
   }
 
@@ -80,10 +83,13 @@ export class AuthController {
     const extState = rawState.slice(dotIdx + 1);
 
     try {
+      console.info('[QF Auth] OAuth callback received', {
+        extState: this.shortId(extState),
+        oauthState: this.shortId(oauthState),
+      });
       const tokens = await this.oauthService.exchangeCode(code, oauthState, extState);
       const sessionId = crypto.randomBytes(32).toString('hex');
-
-      await this.store.setSession(sessionId, {
+      const session = {
         sub: tokens.sub,
         firstName: tokens.firstName,
         lastName: tokens.lastName,
@@ -91,9 +97,18 @@ export class AuthController {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-      });
+      };
 
-      await this.store.setExtStateToSession(extState, sessionId);
+      await this.store.setSession(sessionId, session);
+
+      await this.store.setExtStateToSession(extState, sessionId, session);
+
+      console.info('[QF Auth] Session stored after OAuth callback', {
+        extState: this.shortId(extState),
+        sessionId: this.shortId(sessionId),
+        hasSub: Boolean(tokens.sub),
+        hasRefreshToken: Boolean(tokens.refreshToken),
+      });
 
       res.setHeader('Content-Type', 'text/html');
       res.send(`<!DOCTYPE html>
@@ -122,14 +137,27 @@ export class AuthController {
   async getSession(
     @Param('extState') extState: string,
     @Headers('extension_secret') secret: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
     this.validateSecret(secret);
 
-    const sessionId = await this.store.consumeExtStateToSession(extState);
-    if (!sessionId) throw new NotFoundException('Session not ready');
+    const pickup = await this.store.consumeExtStateToSession(extState);
+    res.setHeader('Cache-Control', 'no-store');
+    if (!pickup) {
+      res.status(202);
+      res.setHeader('Retry-After', '3');
+      console.info('[QF Auth] Session poll pending', {
+        extState: this.shortId(extState),
+      });
+      return { status: 'pending', retryAfterMs: 3000 };
+    }
 
-    const session = await this.store.getSession(sessionId);
-    if (!session) throw new NotFoundException('Session not found');
+    const { sessionId, session } = pickup;
+    console.info('[QF Auth] Session poll completed', {
+      extState: this.shortId(extState),
+      sessionId: this.shortId(sessionId),
+      hasSub: Boolean(session.sub),
+    });
 
     return {
       sessionToken: sessionId,
@@ -176,5 +204,9 @@ export class AuthController {
       await this.store.delSession(sessionToken);
     }
     return { success: true };
+  }
+
+  private shortId(value: string): string {
+    return value ? `${value.slice(0, 8)}…` : '<missing>';
   }
 }
