@@ -15,6 +15,11 @@ export interface SessionData {
   accessTokenExpiresAt: number;
 }
 
+export interface SessionPickup {
+  sessionId: string;
+  session: SessionData;
+}
+
 export interface ISessionStore {
   /** Store PKCE state keyed by the extension-generated extState. TTL: 10 min. */
   setPkceState(extState: string, data: PkceState): Promise<void>;
@@ -30,8 +35,11 @@ export interface ISessionStore {
    * After the OAuth callback completes, map the extState -> sessionId so the
    * extension can poll and retrieve its session token. TTL: 10 min.
    */
-  setExtStateToSession(extState: string, sessionId: string): Promise<void>;
-  getExtStateToSession(extState: string): Promise<string | null>;
+  setExtStateToSession(
+    extState: string,
+    sessionId: string,
+    session: SessionData,
+  ): Promise<void>;
   /** One-shot consume: read then delete. */
-  consumeExtStateToSession(extState: string): Promise<string | null>;
+  consumeExtStateToSession(extState: string): Promise<SessionPickup | null>;
 }

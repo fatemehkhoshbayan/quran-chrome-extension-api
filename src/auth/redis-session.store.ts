@@ -1,5 +1,10 @@
 import { Redis } from '@upstash/redis';
-import { ISessionStore, PkceState, SessionData } from './session.store';
+import {
+  ISessionStore,
+  PkceState,
+  SessionData,
+  SessionPickup,
+} from './session.store';
 
 const PKCE_TTL_S = 10 * 60; // 10 minutes
 const SESSION_TTL_S = 30 * 24 * 60 * 60; // 30 days
@@ -7,6 +12,7 @@ const EXT_STATE_TTL_S = 10 * 60; // 10 minutes
 
 export class RedisSessionStore implements ISessionStore {
   private readonly redis: Redis;
+  private readonly pendingExtStateCache = new Map<string, number>();
 
   constructor(url: string, token: string) {
     this.redis = new Redis({ url, token });
@@ -40,18 +46,37 @@ export class RedisSessionStore implements ISessionStore {
     await this.redis.del(`session:${sessionId}`);
   }
 
-  async setExtStateToSession(extState: string, sessionId: string): Promise<void> {
-    await this.redis.set(`extstate:${extState}`, sessionId, { ex: EXT_STATE_TTL_S });
+  async setExtStateToSession(
+    extState: string,
+    sessionId: string,
+    session: SessionData,
+  ): Promise<void> {
+    this.pendingExtStateCache.delete(extState);
+    await this.redis.set(
+      `extstate:${extState}`,
+      JSON.stringify({ sessionId, session }),
+      { ex: EXT_STATE_TTL_S },
+    );
   }
 
-  async getExtStateToSession(extState: string): Promise<string | null> {
-    return this.redis.get<string>(`extstate:${extState}`);
-  }
+  async consumeExtStateToSession(extState: string): Promise<SessionPickup | null> {
+    const cachedMissUntil = this.pendingExtStateCache.get(extState);
+    if (cachedMissUntil && cachedMissUntil > Date.now()) {
+      return null;
+    }
 
-  async consumeExtStateToSession(extState: string): Promise<string | null> {
     const key = `extstate:${extState}`;
-    const sessionId = await this.redis.get<string>(key);
-    if (sessionId) await this.redis.del(key);
-    return sessionId;
+    const raw = await this.redis.getdel<string | SessionPickup>(key);
+
+    if (!raw) {
+      this.pendingExtStateCache.set(extState, Date.now() + 2_000);
+      return null;
+    }
+
+    if (typeof raw === 'string') {
+      return JSON.parse(raw) as SessionPickup;
+    }
+
+    return raw;
   }
 }
