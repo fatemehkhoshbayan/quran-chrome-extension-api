@@ -40,10 +40,13 @@ export class AuthController {
   @Get('login')
   async login(
     @Query('state') extState: string,
-    @Headers('extension_secret') secret: string,
+    @Headers('extension_secret') headerSecret: string,
+    @Query('extension_secret') querySecret: string,
     @Res() res: Response,
   ): Promise<void> {
-    this.validateSecret(secret);
+    // Browser tab navigations cannot send custom headers, so the extension
+    // passes the secret as a query param for this one redirect endpoint.
+    this.validateSecret(headerSecret ?? querySecret);
     if (!extState) throw new BadRequestException('state query param required');
 
     const url = await this.oauthService.buildAuthorizeUrl(extState);
@@ -132,8 +135,8 @@ export class AuthController {
       sessionToken: sessionId,
       user: {
         sub: session.sub,
-        firstName: session.firstName,
-        lastName: session.lastName,
+        first_name: session.firstName,
+        last_name: session.lastName,
         email: session.email,
       },
     };
@@ -153,8 +156,8 @@ export class AuthController {
     return {
       user: {
         sub: session.sub,
-        firstName: session.firstName,
-        lastName: session.lastName,
+        first_name: session.firstName,
+        last_name: session.lastName,
         email: session.email,
       },
     };
