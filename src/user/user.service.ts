@@ -6,19 +6,20 @@ interface BookmarkBody {
   type: 'ayah';
   key: number;
   verseNumber: number;
-  group: string;
+  mushaf: number;
 }
 
 export interface Bookmark {
   id: string;
   key: number;
   verseNumber: number;
+  isInDefaultCollection?: boolean;
 }
 
+const QURAN_COM_MUSHAF_ID = 4; // UthmaniHafs, matching the extension's text_uthmani verses.
+
 interface QfBookmarksResponse {
-  data?: {
-    bookmarks?: Bookmark[];
-  };
+  data?: Bookmark[];
 }
 
 @Injectable()
@@ -46,11 +47,24 @@ export class UserService {
   async getBookmarks(accessToken: string) {
     try {
       const response = await axios.get<QfBookmarksResponse>(
-        `${this.oauthService.userApiBase}/v1/collections/__default__/bookmarks`,
-        { headers: this.headers(accessToken) },
+        `${this.oauthService.userApiBase}/v1/bookmarks`,
+        {
+          headers: this.headers(accessToken),
+          params: {
+            type: 'ayah',
+            mushafId: QURAN_COM_MUSHAF_ID,
+          },
+        },
       );
-      return { bookmarks: response.data.data?.bookmarks ?? [] };
+      return {
+        bookmarks: (response.data.data ?? []).filter(
+          (bookmark) => bookmark.isInDefaultCollection,
+        ),
+      };
     } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return { bookmarks: [] };
+      }
       this.handleError(err, 'getBookmarks');
     }
   }
@@ -64,7 +78,7 @@ export class UserService {
       type: 'ayah',
       key,
       verseNumber,
-      group: 'verses_6236',
+      mushaf: QURAN_COM_MUSHAF_ID,
     };
 
     try {

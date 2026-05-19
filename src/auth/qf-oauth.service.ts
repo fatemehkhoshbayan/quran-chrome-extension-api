@@ -118,7 +118,7 @@ export class QfOAuthService {
       response_type: 'code',
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'openid offline_access user collection',
+      scope: 'openid offline_access user bookmark collection',
       state: combinedState,
       nonce,
       code_challenge: codeChallenge,
