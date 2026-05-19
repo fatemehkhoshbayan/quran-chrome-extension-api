@@ -16,13 +16,24 @@ function parseExtensionIds(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
+function parseAllowedOrigins(raw: string | undefined): string[] {
+  if (!raw?.trim()) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 function setupApp(app: INestApplication) {
   const config = app.get(ConfigService);
   const extensionIds = parseExtensionIds(config.get<string>('EXTENSION_ID'));
-  const firstAllowedOrigin =
-    extensionIds.length > 0
-      ? `chrome-extension://${extensionIds[0]}`
-      : undefined;
+  const allowedOrigins = [
+    ...extensionIds.map((id) => `chrome-extension://${id}`),
+    ...parseAllowedOrigins(config.get<string>('EXTENSION_ORIGINS')),
+  ];
+  const firstAllowedOrigin = allowedOrigins[0];
 
   app.enableCors({
     origin: (
@@ -33,13 +44,14 @@ function setupApp(app: INestApplication) {
         cb(null, firstAllowedOrigin ?? false);
         return;
       }
-      const matchedId = extensionIds.find(
-        (id) => origin === `chrome-extension://${id}`,
-      );
-      if (matchedId) {
-        cb(null, `chrome-extension://${matchedId}`);
+      if (allowedOrigins.includes(origin)) {
+        cb(null, origin);
       } else {
-        cb(new Error('Not allowed by CORS'));
+        console.warn('[CORS] Rejected origin', {
+          origin,
+          allowedOrigins,
+        });
+        cb(null, false);
       }
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
