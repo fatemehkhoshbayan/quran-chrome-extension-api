@@ -7,6 +7,7 @@ interface BookmarkBody {
   key: number;
   verseNumber: number;
   mushaf: number;
+  mushafId: number;
 }
 
 export interface Bookmark {
@@ -82,15 +83,26 @@ export class UserService {
 
     const collectionsResponse = await axios.get<QfCollectionsResponse>(
       collectionsUrl,
-      { headers: this.headers(accessToken) },
+      { headers: this.headers(accessToken), params: { first: 50 } },
     );
-    const existing = collectionsResponse.data.data?.find(
+
+    this.logger.log('Quran Foundation list collections raw response', {
+      upstreamStatus: collectionsResponse.status,
+      dataKeys: Object.keys(collectionsResponse.data ?? {}),
+      isArray: Array.isArray(collectionsResponse.data.data),
+      count: Array.isArray(collectionsResponse.data.data) ? collectionsResponse.data.data.length : 'n/a',
+    });
+
+    const collections: Collection[] = Array.isArray(collectionsResponse.data.data)
+      ? collectionsResponse.data.data
+      : [];
+
+    const existing = collections.find(
       (collection) => collection.name === EXTENSION_COLLECTION_NAME,
     );
 
     if (existing) {
       this.logger.log('Quran Foundation extension collection found', {
-        upstreamStatus: collectionsResponse.status,
         collectionId: existing.id,
       });
       return existing;
@@ -177,6 +189,7 @@ export class UserService {
       key,
       verseNumber,
       mushaf: QURAN_COM_MUSHAF_ID,
+      mushafId: QURAN_COM_MUSHAF_ID,
     };
     const collection = await this.getOrCreateExtensionCollection(accessToken);
     const collectionBookmarkUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
