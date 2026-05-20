@@ -39,6 +39,7 @@ interface QfCollectionItemsResponse {
   };
 }
 
+
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
@@ -134,10 +135,11 @@ export class UserService {
 
   async getBookmarks(accessToken: string) {
     const collection = await this.getOrCreateExtensionCollection(accessToken);
-    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
+    // GET /v1/collections/:id returns the collection + its bookmarks (no /bookmarks suffix).
+    // The endpoint does not accept filter params like `type` or `mushafId`.
+    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
     const params = {
-      type: 'ayah',
-      mushafId: QURAN_COM_MUSHAF_ID,
+      first: 20,
     };
 
     this.logger.log('Calling Quran Foundation get bookmarks', {
@@ -155,14 +157,14 @@ export class UserService {
           params,
         },
       );
+      const bookmarks = response.data.data?.bookmarks ?? [];
       this.logger.log('Quran Foundation get bookmarks succeeded', {
         upstreamStatus: response.status,
-        totalBookmarks: response.data.data?.bookmarks?.length ?? 0,
+        totalBookmarks: bookmarks.length,
         collectionId: collection.id,
+        sampleId: bookmarks[0]?.id ?? '<none>',
       });
-      return {
-        bookmarks: response.data.data?.bookmarks ?? [],
-      };
+      return { bookmarks };
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
         this.logger.warn('Quran Foundation get bookmarks returned 404; treating as empty list', {
@@ -192,6 +194,7 @@ export class UserService {
       mushafId: QURAN_COM_MUSHAF_ID,
     };
     const collection = await this.getOrCreateExtensionCollection(accessToken);
+    // POST /v1/collections/:id/bookmarks — response only says "collection bookmark added", no ID returned.
     const collectionBookmarkUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
 
     try {
@@ -202,34 +205,117 @@ export class UserService {
         collectionId: collection.id,
       });
 
-      const collectionResponse = await axios.post(collectionBookmarkUrl, body, {
-        headers: this.headers(accessToken),
-      });
+      const addResponse = await axios.post(
+        collectionBookmarkUrl,
+        body,
+        { headers: this.headers(accessToken) },
+      );
       this.logger.log('Quran Foundation add bookmark to extension collection succeeded', {
-        upstreamStatus: collectionResponse.status,
+        upstreamStatus: addResponse.status,
         collectionId: collection.id,
       });
 
-      return { id: `${key}:${verseNumber}`, key, verseNumber };
+      // The POST response does not include the bookmark ID, so we immediately
+      // fetch the collection to find the real QF ID for the just-added bookmark.
+      const collectionUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
+      const listResp = await axios.get<QfCollectionItemsResponse>(collectionUrl, {
+        headers: this.headers(accessToken),
+        params: { first: 20 },
+      });
+      const found = listResp.data?.data?.bookmarks?.find(
+        b => b.key === key && b.verseNumber === verseNumber,
+      );
+      const realId = found?.id ?? `${key}:${verseNumber}`;
+      this.logger.log('Resolved new bookmark real ID', { realId, key, verseNumber });
+      return { id: realId, key, verseNumber };
     } catch (err) {
       this.handleError(err, 'addBookmark');
     }
   }
 
-  async deleteBookmark(accessToken: string, bookmarkId: string) {
-    const url = `${this.oauthService.userApiBase}/v1/bookmarks/${bookmarkId}`;
+  /**
+   * Resolve a bookmark ID to the real QF UUID within the given collection.
+   *
+   * Synthetic IDs have the form "key:verseNumber" (no hyphens). Real QF UUIDs
+   * contain hyphens. When a synthetic ID is received we list the collection
+   * and find the matching entry by key + verseNumber.
+   *
+   * Throws 404 if the bookmark cannot be found in the collection.
+   */
+  private async resolveBookmarkIdInCollection(
+    accessToken: string,
+    collection: Collection,
+    bookmarkId: string,
+  ): Promise<string> {
+    // QF IDs are cuid-format (e.g. "w0o51b1k2ay0z6qwb8vs95wk") — no hyphens, no colons.
+    // Synthetic IDs always contain ":" (e.g. "96:16"). So the colon is the reliable discriminator.
+    if (!bookmarkId.includes(':')) {
+      return bookmarkId;
+    }
 
-    this.logger.log('Calling Quran Foundation delete bookmark', {
+    // Synthetic "key:verseNumber" format — resolve via collection list.
+    const parts = bookmarkId.split(':');
+    const key = parseInt(parts[0], 10);
+    const verseNumber = parseInt(parts[1], 10);
+    if (isNaN(key) || isNaN(verseNumber)) {
+      throw new HttpException(`Cannot parse bookmark id: ${bookmarkId}`, HttpStatus.BAD_REQUEST);
+    }
+
+    this.logger.log('Resolving synthetic bookmark ID via collection lookup', {
+      bookmarkId,
+      key,
+      verseNumber,
+      collectionId: collection.id,
+    });
+
+    // GET /v1/collections/:id returns collection + bookmarks (no /bookmarks suffix for GET).
+    const listUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
+    const listResp = await axios.get<QfCollectionItemsResponse>(listUrl, {
+      headers: this.headers(accessToken),
+      params: { first: 20 },
+    });
+
+    const found = listResp.data?.data?.bookmarks?.find(
+      b => b.key === key && b.verseNumber === verseNumber,
+    );
+
+    if (!found?.id) {
+      throw new HttpException(
+        `Bookmark key=${key} verseNumber=${verseNumber} not found in collection`,
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    this.logger.log('Resolved synthetic ID to real QF bookmark ID', {
+      from: bookmarkId,
+      to: found.id,
+    });
+    return found.id;
+  }
+
+  async deleteBookmark(accessToken: string, bookmarkId: string) {
+    // Per QF docs, DELETE /v1/bookmarks/:id only removes *orphan* bookmarks.
+    // For bookmarks inside a collection the correct endpoint is
+    // DELETE /v1/collections/:collectionId/bookmarks/:bookmarkId.
+    const collection = await this.getOrCreateExtensionCollection(accessToken);
+    const resolvedId = await this.resolveBookmarkIdInCollection(accessToken, collection, bookmarkId);
+
+    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks/${resolvedId}`;
+
+    this.logger.log('Calling Quran Foundation delete collection bookmark', {
       upstreamUrl: url,
       upstreamMethod: 'DELETE',
-      bookmarkId,
+      originalId: bookmarkId,
+      resolvedId,
+      collectionId: collection.id,
     });
 
     try {
       const response = await axios.delete(url, { headers: this.headers(accessToken) });
-      this.logger.log('Quran Foundation delete bookmark succeeded', {
+      this.logger.log('Quran Foundation delete collection bookmark succeeded', {
         upstreamStatus: response.status,
-        bookmarkId,
+        resolvedId,
+        collectionId: collection.id,
       });
       return response.data;
     } catch (err) {
