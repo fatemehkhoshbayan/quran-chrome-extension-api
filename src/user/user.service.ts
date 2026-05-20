@@ -83,7 +83,7 @@ export class UserService {
 
     const collectionsResponse = await axios.get<QfCollectionsResponse>(
       collectionsUrl,
-      { headers: this.headers(accessToken), params: { first: 50 } },
+      { headers: this.headers(accessToken), params: { first: 20 } },
     );
 
     this.logger.log('Quran Foundation list collections raw response', {
