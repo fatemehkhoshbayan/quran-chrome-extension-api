@@ -136,10 +136,10 @@ export class UserService {
   async getBookmarks(accessToken: string) {
     const collection = await this.getOrCreateExtensionCollection(accessToken);
     // GET /v1/collections/:id returns the collection + its bookmarks (no /bookmarks suffix).
+    // The endpoint does not accept filter params like `type` or `mushafId`.
     const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
     const params = {
-      type: 'ayah',
-      mushafId: QURAN_COM_MUSHAF_ID,
+      first: 20,
     };
 
     this.logger.log('Calling Quran Foundation get bookmarks', {
@@ -247,8 +247,9 @@ export class UserService {
     collection: Collection,
     bookmarkId: string,
   ): Promise<string> {
-    // Already a real UUID — return immediately.
-    if (bookmarkId.includes('-')) {
+    // QF IDs are cuid-format (e.g. "w0o51b1k2ay0z6qwb8vs95wk") — no hyphens, no colons.
+    // Synthetic IDs always contain ":" (e.g. "96:16"). So the colon is the reliable discriminator.
+    if (!bookmarkId.includes(':')) {
       return bookmarkId;
     }
 
