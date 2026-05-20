@@ -56,8 +56,9 @@ export class QfOAuthService {
   ) {
     this.authBaseUrl =
       config.get<string>('QF_USER_AUTH_BASE_URL') ?? 'https://oauth2.quran.foundation';
-    this.apiBaseUrl =
-      config.get<string>('QF_USER_API_BASE_URL') ?? 'https://apis.quran.foundation';
+    this.apiBaseUrl = this.normalizeUserApiBaseUrl(
+      config.get<string>('QF_USER_API_BASE_URL') ?? 'https://apis.quran.foundation/auth',
+    );
     this.clientId =
       config.get<string>('QF_USER_CLIENT_ID') ?? config.get<string>('CLIENT_ID') ?? '';
     this.clientSecret =
@@ -80,6 +81,24 @@ export class QfOAuthService {
     } catch {
       return '<invalid-url>';
     }
+  }
+
+  private normalizeUserApiBaseUrl(url: string): string {
+    const trimmed = url.replace(/\/+$/, '');
+
+    try {
+      const parsed = new URL(trimmed);
+      if (
+        parsed.host === 'apis.quran.foundation' &&
+        (parsed.pathname === '' || parsed.pathname === '/')
+      ) {
+        return `${trimmed}/auth`;
+      }
+    } catch {
+      return trimmed;
+    }
+
+    return trimmed;
   }
 
   getDiagnostics() {
