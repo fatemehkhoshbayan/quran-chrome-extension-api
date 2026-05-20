@@ -39,13 +39,6 @@ interface QfCollectionItemsResponse {
   };
 }
 
-interface QfAddCollectionBookmarkResponse {
-  data?: {
-    id?: string;
-    key?: number;
-    verseNumber?: number;
-  };
-}
 
 @Injectable()
 export class UserService {
@@ -142,7 +135,8 @@ export class UserService {
 
   async getBookmarks(accessToken: string) {
     const collection = await this.getOrCreateExtensionCollection(accessToken);
-    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
+    // GET /v1/collections/:id returns the collection + its bookmarks (no /bookmarks suffix).
+    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
     const params = {
       type: 'ayah',
       mushafId: QURAN_COM_MUSHAF_ID,
@@ -200,6 +194,7 @@ export class UserService {
       mushafId: QURAN_COM_MUSHAF_ID,
     };
     const collection = await this.getOrCreateExtensionCollection(accessToken);
+    // POST /v1/collections/:id/bookmarks — response only says "collection bookmark added", no ID returned.
     const collectionBookmarkUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
 
     try {
@@ -210,20 +205,29 @@ export class UserService {
         collectionId: collection.id,
       });
 
-      const collectionResponse = await axios.post<QfAddCollectionBookmarkResponse>(
+      const addResponse = await axios.post(
         collectionBookmarkUrl,
         body,
         { headers: this.headers(accessToken) },
       );
-      const qfBookmarkId = collectionResponse.data?.data?.id;
       this.logger.log('Quran Foundation add bookmark to extension collection succeeded', {
-        upstreamStatus: collectionResponse.status,
+        upstreamStatus: addResponse.status,
         collectionId: collection.id,
-        qfBookmarkId,
       });
 
-      // Use the real QF bookmark ID so the frontend can delete it later.
-      return { id: qfBookmarkId ?? `${key}:${verseNumber}`, key, verseNumber };
+      // The POST response does not include the bookmark ID, so we immediately
+      // fetch the collection to find the real QF ID for the just-added bookmark.
+      const collectionUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
+      const listResp = await axios.get<QfCollectionItemsResponse>(collectionUrl, {
+        headers: this.headers(accessToken),
+        params: { first: 20 },
+      });
+      const found = listResp.data?.data?.bookmarks?.find(
+        b => b.key === key && b.verseNumber === verseNumber,
+      );
+      const realId = found?.id ?? `${key}:${verseNumber}`;
+      this.logger.log('Resolved new bookmark real ID', { realId, key, verseNumber });
+      return { id: realId, key, verseNumber };
     } catch (err) {
       this.handleError(err, 'addBookmark');
     }
@@ -263,7 +267,8 @@ export class UserService {
       collectionId: collection.id,
     });
 
-    const listUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
+    // GET /v1/collections/:id returns collection + bookmarks (no /bookmarks suffix for GET).
+    const listUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}`;
     const listResp = await axios.get<QfCollectionItemsResponse>(listUrl, {
       headers: this.headers(accessToken),
       params: { first: 20 },
