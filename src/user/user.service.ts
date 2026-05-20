@@ -163,14 +163,14 @@ export class UserService {
           params,
         },
       );
+      const bookmarks = response.data.data?.bookmarks ?? [];
       this.logger.log('Quran Foundation get bookmarks succeeded', {
         upstreamStatus: response.status,
-        totalBookmarks: response.data.data?.bookmarks?.length ?? 0,
+        totalBookmarks: bookmarks.length,
         collectionId: collection.id,
+        sampleId: bookmarks[0]?.id ?? '<none>',
       });
-      return {
-        bookmarks: response.data.data?.bookmarks ?? [],
-      };
+      return { bookmarks };
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
         this.logger.warn('Quran Foundation get bookmarks returned 404; treating as empty list', {
@@ -229,20 +229,69 @@ export class UserService {
     }
   }
 
+  /**
+   * Resolve a synthetic "key:verseNumber" bookmark ID to a real QF bookmark ID
+   * by listing the extension collection and finding the matching entry.
+   * Returns the original ID unchanged if it already looks like a real ID (contains '-')
+   * or if the lookup fails.
+   */
+  private async resolveBookmarkId(accessToken: string, bookmarkId: string): Promise<string> {
+    // Real QF IDs contain hyphens (UUID format); synthetic ones are "key:verseNumber".
+    if (!bookmarkId.includes(':') || bookmarkId.includes('-')) {
+      return bookmarkId;
+    }
+
+    const parts = bookmarkId.split(':');
+    const key = parseInt(parts[0], 10);
+    const verseNumber = parseInt(parts[1], 10);
+    if (isNaN(key) || isNaN(verseNumber)) return bookmarkId;
+
+    this.logger.log('Resolving synthetic bookmark ID via collection lookup', { bookmarkId, key, verseNumber });
+
+    try {
+      const collection = await this.getOrCreateExtensionCollection(accessToken);
+      const listUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
+      const listResp = await axios.get<QfCollectionItemsResponse>(listUrl, {
+        headers: this.headers(accessToken),
+        params: { first: 20 },
+      });
+      const found = listResp.data?.data?.bookmarks?.find(
+        b => b.key === key && b.verseNumber === verseNumber,
+      );
+      if (found?.id) {
+        this.logger.log('Resolved synthetic ID to real QF bookmark ID', {
+          from: bookmarkId,
+          to: found.id,
+        });
+        return found.id;
+      }
+      this.logger.warn('Bookmark not found in collection during ID resolution', { bookmarkId, key, verseNumber });
+    } catch (err) {
+      this.logger.warn('Failed to resolve synthetic bookmark ID; will attempt delete with original', {
+        bookmarkId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    return bookmarkId;
+  }
+
   async deleteBookmark(accessToken: string, bookmarkId: string) {
-    const url = `${this.oauthService.userApiBase}/v1/bookmarks/${bookmarkId}`;
+    const resolvedId = await this.resolveBookmarkId(accessToken, bookmarkId);
+    const url = `${this.oauthService.userApiBase}/v1/bookmarks/${resolvedId}`;
 
     this.logger.log('Calling Quran Foundation delete bookmark', {
       upstreamUrl: url,
       upstreamMethod: 'DELETE',
-      bookmarkId,
+      originalId: bookmarkId,
+      resolvedId,
     });
 
     try {
       const response = await axios.delete(url, { headers: this.headers(accessToken) });
       this.logger.log('Quran Foundation delete bookmark succeeded', {
         upstreamStatus: response.status,
-        bookmarkId,
+        resolvedId,
       });
       return response.data;
     } catch (err) {
