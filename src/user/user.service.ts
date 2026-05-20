@@ -39,6 +39,14 @@ interface QfCollectionItemsResponse {
   };
 }
 
+interface QfAddCollectionBookmarkResponse {
+  data?: {
+    id?: string;
+    key?: number;
+    verseNumber?: number;
+  };
+}
+
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
@@ -202,15 +210,20 @@ export class UserService {
         collectionId: collection.id,
       });
 
-      const collectionResponse = await axios.post(collectionBookmarkUrl, body, {
-        headers: this.headers(accessToken),
-      });
+      const collectionResponse = await axios.post<QfAddCollectionBookmarkResponse>(
+        collectionBookmarkUrl,
+        body,
+        { headers: this.headers(accessToken) },
+      );
+      const qfBookmarkId = collectionResponse.data?.data?.id;
       this.logger.log('Quran Foundation add bookmark to extension collection succeeded', {
         upstreamStatus: collectionResponse.status,
         collectionId: collection.id,
+        qfBookmarkId,
       });
 
-      return { id: `${key}:${verseNumber}`, key, verseNumber };
+      // Use the real QF bookmark ID so the frontend can delete it later.
+      return { id: qfBookmarkId ?? `${key}:${verseNumber}`, key, verseNumber };
     } catch (err) {
       this.handleError(err, 'addBookmark');
     }
