@@ -17,9 +17,25 @@ export interface Bookmark {
 }
 
 const QURAN_COM_MUSHAF_ID = 4; // UthmaniHafs, matching the extension's text_uthmani verses.
+const EXTENSION_COLLECTION_NAME = 'Daily Quran Extension';
 
-interface QfBookmarksResponse {
-  data?: Bookmark[];
+interface Collection {
+  id: string;
+  name: string;
+}
+
+interface QfCollectionsResponse {
+  data?: Collection[];
+}
+
+interface QfCollectionResponse {
+  data?: Collection;
+}
+
+interface QfCollectionItemsResponse {
+  data?: {
+    bookmarks?: Bookmark[];
+  };
 }
 
 @Injectable()
@@ -55,8 +71,58 @@ export class UserService {
     throw err;
   }
 
+  private async getOrCreateExtensionCollection(accessToken: string): Promise<Collection> {
+    const collectionsUrl = `${this.oauthService.userApiBase}/v1/collections`;
+
+    this.logger.log('Calling Quran Foundation list collections', {
+      upstreamUrl: collectionsUrl,
+      upstreamMethod: 'GET',
+      collectionName: EXTENSION_COLLECTION_NAME,
+    });
+
+    const collectionsResponse = await axios.get<QfCollectionsResponse>(
+      collectionsUrl,
+      { headers: this.headers(accessToken) },
+    );
+    const existing = collectionsResponse.data.data?.find(
+      (collection) => collection.name === EXTENSION_COLLECTION_NAME,
+    );
+
+    if (existing) {
+      this.logger.log('Quran Foundation extension collection found', {
+        upstreamStatus: collectionsResponse.status,
+        collectionId: existing.id,
+      });
+      return existing;
+    }
+
+    this.logger.log('Calling Quran Foundation create extension collection', {
+      upstreamUrl: collectionsUrl,
+      upstreamMethod: 'POST',
+      body: { name: EXTENSION_COLLECTION_NAME },
+    });
+
+    const createResponse = await axios.post<QfCollectionResponse>(
+      collectionsUrl,
+      { name: EXTENSION_COLLECTION_NAME },
+      { headers: this.headers(accessToken) },
+    );
+
+    if (!createResponse.data.data) {
+      throw new HttpException('Quran Foundation did not return created collection', HttpStatus.BAD_GATEWAY);
+    }
+
+    this.logger.log('Quran Foundation extension collection created', {
+      upstreamStatus: createResponse.status,
+      collectionId: createResponse.data.data.id,
+    });
+
+    return createResponse.data.data;
+  }
+
   async getBookmarks(accessToken: string) {
-    const url = `${this.oauthService.userApiBase}/v1/bookmarks`;
+    const collection = await this.getOrCreateExtensionCollection(accessToken);
+    const url = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
     const params = {
       type: 'ayah',
       mushafId: QURAN_COM_MUSHAF_ID,
@@ -66,10 +132,11 @@ export class UserService {
       upstreamUrl: url,
       upstreamMethod: 'GET',
       params,
+      collectionId: collection.id,
     });
 
     try {
-      const response = await axios.get<QfBookmarksResponse>(
+      const response = await axios.get<QfCollectionItemsResponse>(
         url,
         {
           headers: this.headers(accessToken),
@@ -78,12 +145,11 @@ export class UserService {
       );
       this.logger.log('Quran Foundation get bookmarks succeeded', {
         upstreamStatus: response.status,
-        totalBookmarks: response.data.data?.length ?? 0,
+        totalBookmarks: response.data.data?.bookmarks?.length ?? 0,
+        collectionId: collection.id,
       });
       return {
-        bookmarks: (response.data.data ?? []).filter(
-          (bookmark) => bookmark.isInDefaultCollection,
-        ),
+        bookmarks: response.data.data?.bookmarks ?? [],
       };
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
@@ -93,6 +159,7 @@ export class UserService {
           upstreamUrl: err.config?.url,
           upstreamMethod: err.config?.method?.toUpperCase(),
           params,
+          collectionId: collection.id,
         });
         return { bookmarks: [] };
       }
@@ -111,20 +178,25 @@ export class UserService {
       verseNumber,
       mushaf: QURAN_COM_MUSHAF_ID,
     };
-    const url = `${this.oauthService.userApiBase}/v1/collections/__default__/bookmarks`;
-
-    this.logger.log('Calling Quran Foundation add bookmark', {
-      upstreamUrl: url,
-      upstreamMethod: 'POST',
-      body,
-    });
+    const collection = await this.getOrCreateExtensionCollection(accessToken);
+    const collectionBookmarkUrl = `${this.oauthService.userApiBase}/v1/collections/${collection.id}/bookmarks`;
 
     try {
-      const response = await axios.post(url, body, { headers: this.headers(accessToken) });
-      this.logger.log('Quran Foundation add bookmark succeeded', {
-        upstreamStatus: response.status,
+      this.logger.log('Calling Quran Foundation add bookmark to extension collection', {
+        upstreamUrl: collectionBookmarkUrl,
+        upstreamMethod: 'POST',
         body,
+        collectionId: collection.id,
       });
+
+      const collectionResponse = await axios.post(collectionBookmarkUrl, body, {
+        headers: this.headers(accessToken),
+      });
+      this.logger.log('Quran Foundation add bookmark to extension collection succeeded', {
+        upstreamStatus: collectionResponse.status,
+        collectionId: collection.id,
+      });
+
       return { id: `${key}:${verseNumber}`, key, verseNumber };
     } catch (err) {
       this.handleError(err, 'addBookmark');
