@@ -17,7 +17,27 @@ export interface Bookmark {
   isInDefaultCollection?: boolean;
 }
 
-const QURAN_COM_MUSHAF_ID = 4; // UthmaniHafs, matching the extension's text_uthmani verses.
+export interface UserTranslationPreference {
+  translationId?: number;
+  languageIso?: string;
+}
+
+interface QfPreferencesResponse {
+  success?: boolean;
+  data?: {
+    translations?: {
+      selectedTranslations?: number[];
+    };
+    language?: {
+      language?: string;
+    };
+    reading?: {
+      selectedReadingTranslation?: string;
+    };
+  };
+}
+
+const QURAN_COM_MUSHAF_ID = 4;
 /** Virtual Favorites collection used by Quran.com — no custom collection create needed. */
 const DEFAULT_COLLECTION_ID = '__default__';
 
@@ -221,6 +241,64 @@ export class UserService {
       return response.data;
     } catch (err) {
       this.handleError(err, 'deleteBookmark');
+    }
+  }
+
+  extractTranslationPreference(data: QfPreferencesResponse['data']): UserTranslationPreference {
+    const translationId =
+      data?.translations?.selectedTranslations?.[0] ??
+      (data?.reading?.selectedReadingTranslation
+        ? Number.parseInt(data.reading.selectedReadingTranslation, 10)
+        : undefined);
+
+    return {
+      translationId: Number.isNaN(translationId) ? undefined : translationId,
+      languageIso: data?.language?.language,
+    };
+  }
+
+  async getPreferences(accessToken: string): Promise<UserTranslationPreference> {
+    const url = `${this.oauthService.userApiBase}/v1/preferences`;
+
+    try {
+      const response = await axios.get<QfPreferencesResponse>(url, {
+        headers: this.headers(accessToken),
+      });
+      return this.extractTranslationPreference(response.data.data);
+    } catch (err) {
+      this.handleError(err, 'getPreferences');
+    }
+  }
+
+  async updateTranslationPreference(
+    accessToken: string,
+    translationId: number,
+    languageIso: string,
+  ): Promise<UserTranslationPreference> {
+    const url = `${this.oauthService.userApiBase}/v1/bulk-preferences`;
+
+    try {
+      await axios.post(
+        url,
+        {
+          preferences: {
+            translations: {
+              selectedTranslations: [translationId],
+            },
+            language: {
+              language: languageIso,
+            },
+            reading: {
+              selectedReadingTranslation: String(translationId),
+            },
+          },
+        },
+        { headers: this.headers(accessToken) },
+      );
+
+      return { translationId, languageIso };
+    } catch (err) {
+      this.handleError(err, 'updateTranslationPreference');
     }
   }
 }

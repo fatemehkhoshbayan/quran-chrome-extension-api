@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -16,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { SessionAuthGuard } from '../auth/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/session-auth.guard';
 import { UserService } from './user.service';
+import { verifyExtensionSecret } from '../common/verify-secret';
 
 @Controller('user')
 export class UserController {
@@ -27,7 +29,8 @@ export class UserController {
   ) {}
 
   private validateSecret(secret?: string): void {
-    if (secret !== this.config.get<string>('EXTENSION_SECRET')) {
+    const expected = this.config.get<string>('EXTENSION_SECRET');
+    if (!verifyExtensionSecret(secret, expected)) {
       throw new UnauthorizedException();
     }
   }
@@ -80,6 +83,34 @@ export class UserController {
     });
     this.validateSecret(secret);
     return this.userService.deleteBookmark(req.sessionData.accessToken, id);
+  }
+
+  @Get('preferences')
+  @UseGuards(SessionAuthGuard)
+  async getPreferences(
+    @Headers('extension_secret') secret: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    this.validateSecret(secret);
+    return this.userService.getPreferences(req.sessionData.accessToken);
+  }
+
+  @Put('preferences')
+  @UseGuards(SessionAuthGuard)
+  async updatePreferences(
+    @Headers('extension_secret') secret: string,
+    @Req() req: AuthenticatedRequest,
+    @Body() body: { translationId?: number; languageIso?: string },
+  ) {
+    this.validateSecret(secret);
+    if (!body?.translationId || !body?.languageIso) {
+      throw new BadRequestException('translationId and languageIso are required');
+    }
+    return this.userService.updateTranslationPreference(
+      req.sessionData.accessToken,
+      body.translationId,
+      body.languageIso,
+    );
   }
 
   private shortId(value: string | undefined): string {

@@ -63,7 +63,6 @@ export class TafsirService {
     chapter_name: string,
     verseKey: string,
     text: string,
-    tafsirHtml: string,
     boundedTafsir: string,
     userQuestion: string | undefined,
   ): string {
@@ -76,9 +75,6 @@ export class TafsirService {
       Verse reference: ${verseKey}
       Chapter: ${chapter_name}
       Verse text: "${text}"
-
-      Tafsir context (original HTML):
-      ${tafsirHtml || 'No tafsir HTML provided.'}
 
       Tafsir context (plain text extracted from HTML):
       ${boundedTafsir || 'No readable tafsir text available after HTML cleanup.'}
@@ -224,7 +220,6 @@ export class TafsirService {
       chapter_name,
       verseKey,
       text,
-      tafsirHtml,
       boundedTafsir,
       question,
     );
