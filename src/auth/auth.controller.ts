@@ -68,9 +68,25 @@ export class AuthController {
   async callback(
     @Query('code') code: string,
     @Query('state') rawState: string,
+    @Query('error') error: string,
+    @Query('error_description') errorDescription: string,
     @Res() res: Response,
   ): Promise<void> {
+    if (error) {
+      console.error('[QF Auth] OAuth provider returned an error', {
+        error,
+        errorDescription,
+        state: rawState ? this.shortId(rawState) : '<missing>',
+      });
+      res.status(400).send(`Login failed: ${error}${errorDescription ? ` — ${errorDescription}` : ''}`);
+      return;
+    }
+
     if (!code || !rawState) {
+      console.error('[QF Auth] Callback missing code or state', {
+        codePresent: Boolean(code),
+        statePresent: Boolean(rawState),
+      });
       res.status(400).send('Missing code or state');
       return;
     }
