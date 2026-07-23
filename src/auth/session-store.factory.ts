@@ -1,24 +1,23 @@
 import { ISessionStore } from './session.store';
-import { RedisSessionStore } from './redis-session.store';
 import { MemorySessionStore } from './memory-session.store';
+import { PostgresSessionStore } from './postgres-session.store';
+import type { PrismaService } from '../prisma/prisma.service';
 
 export const SESSION_STORE = 'SESSION_STORE';
 
-export function createSessionStore(): ISessionStore {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+export function createSessionStore(prisma?: PrismaService): ISessionStore {
+  const databaseUrl = process.env.DATABASE_URL?.trim();
 
-  if (url && token) {
-    return new RedisSessionStore(url, token);
+  if (databaseUrl && prisma) {
+    return new PostgresSessionStore(prisma);
   }
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in production. ' +
-        'Create a free database at https://console.upstash.com',
+      'DATABASE_URL must be set in production. Create a Neon Postgres database and set DATABASE_URL.',
     );
   }
 
-  console.warn('[SessionStore] Upstash env not set — using in-memory store (dev only)');
+  console.warn('[SessionStore] DATABASE_URL not set — using in-memory store (dev only)');
   return new MemorySessionStore();
 }

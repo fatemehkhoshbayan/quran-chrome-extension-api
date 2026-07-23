@@ -16,6 +16,7 @@ import * as crypto from 'crypto';
 import { QfOAuthService } from './qf-oauth.service';
 import type { ISessionStore } from './session.store';
 import { SESSION_STORE } from './session-store.factory';
+import { verifyExtensionSecret } from '../common/verify-secret';
 
 @Controller('auth/quran')
 export class AuthController {
@@ -26,7 +27,8 @@ export class AuthController {
   ) {}
 
   private validateSecret(secret?: string): void {
-    if (secret !== this.config.get<string>('EXTENSION_SECRET')) {
+    const expected = this.config.get<string>('EXTENSION_SECRET');
+    if (!verifyExtensionSecret(secret, expected)) {
       throw new UnauthorizedException();
     }
   }
