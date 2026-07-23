@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PkceState {
+  extState     String   @id
+  oauthState   String
+  nonce        String
+  codeVerifier String
+  expiresAt    DateTime
+
+  @@map("pkce_states")
+}
+
+model Session {
+  id                   String   @id
+  sub                  String
+  firstName            String
+  lastName             String
+  email                String
+  accessToken          String
+  refreshToken         String
+  accessTokenExpiresAt BigInt
+  expiresAt            DateTime
+
+  @@map("sessions")
+}
+
+model ExtStateSession {
+  extState  String   @id
+  sessionId String
+  session   Json
+  expiresAt DateTime
+
+  @@map("ext_state_sessions")
+}
+
+model AiUsageLog {
+  id        String   @id @default(uuid())
+  sub       String
+  createdAt DateTime @default(now())
+
+  @@index([sub, createdAt])
+  @@map("ai_usage_log")
+}
