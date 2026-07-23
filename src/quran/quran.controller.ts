@@ -2,11 +2,13 @@ import {
   Controller,
   Get,
   Param,
+  Query,
   Headers,
   UnauthorizedException,
 } from '@nestjs/common';
 import { QuranService } from './quran.service';
 import { ConfigService } from '@nestjs/config';
+import { verifyExtensionSecret } from '../common/verify-secret';
 
 @Controller('quran')
 export class QuranController {
@@ -16,15 +18,31 @@ export class QuranController {
   ) {}
 
   private validate(secret?: string) {
-    if (secret !== this.config.get<string>('EXTENSION_SECRET')) {
+    const expected = this.config.get<string>('EXTENSION_SECRET');
+    if (!verifyExtensionSecret(secret, expected)) {
       throw new UnauthorizedException();
     }
   }
 
+  private parseTranslationId(raw?: string): number | undefined {
+    if (!raw) return undefined;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
   @Get('random-verse')
-  randomVerse(@Headers('extension_secret') secret: string) {
+  randomVerse(
+    @Headers('extension_secret') secret: string,
+    @Query('translationId') translationId?: string,
+  ) {
     this.validate(secret);
-    return this.quran.getRandomVerse();
+    return this.quran.getRandomVerse(this.parseTranslationId(translationId));
+  }
+
+  @Get('languages')
+  languages(@Headers('extension_secret') secret: string) {
+    this.validate(secret);
+    return this.quran.getLanguages();
   }
 
   @Get('translations')
@@ -58,8 +76,9 @@ export class QuranController {
   verses(
     @Param('key') key: string,
     @Headers('extension_secret') secret: string,
+    @Query('translationId') translationId?: string,
   ) {
     this.validate(secret);
-    return this.quran.getVersesByKey(key);
+    return this.quran.getVersesByKey(key, this.parseTranslationId(translationId));
   }
 }

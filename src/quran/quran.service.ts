@@ -9,11 +9,44 @@ const CREDENTIALS_ERROR =
   'Missing Quran Foundation API credentials. Request access: https://api-docs.quran.foundation/request-access';
 const BUFFER_MS = 30_000; // Re-request token 30s before expiry (per docs)
 
+const DEFAULT_TRANSLATION_ID = '85';
+const LANGUAGES_CACHE_MS = 6 * 60 * 60 * 1000;
+
+interface QfLanguage {
+  id: number;
+  name: string;
+  native_name: string;
+  iso_code: string;
+  direction: string;
+}
+
+interface QfTranslationResource {
+  id: number;
+  name: string;
+  author_name: string;
+  language_name: string;
+}
+
+export interface LanguageOption {
+  id: number;
+  name: string;
+  native_name: string;
+  iso_code: string;
+  direction: string;
+  defaultTranslation: {
+    id: number;
+    name: string;
+    author_name: string;
+  };
+}
+
 @Injectable()
 export class QuranService {
   private accessToken: string | null = null;
   private tokenExpiresAt: number | null = null;
   private tokenPending: Promise<string> | null = null;
+  private languagesCache: { data: { languages: LanguageOption[] }; expiresAt: number } | null =
+    null;
 
   // =====================
   // Local
@@ -171,15 +204,15 @@ export class QuranService {
     }
   }
 
-  async getRandomVerse(): Promise<{ verse: Verse }> {
+  async getRandomVerse(translationId?: number): Promise<{ verse: Verse }> {
     const response = await this.quranRequest<{ verse: Verse }>({
       url: '/verses/random',
       method: 'GET',
       params: {
         fields: 'text_uthmani,chapter_id',
         audio: '7',
-        translations: '85',
-        translation_fields: 'text,id,language_name',
+        translations: String(translationId ?? DEFAULT_TRANSLATION_ID),
+        translation_fields: 'text,id,language_name,resource_name',
       },
     });
 
@@ -206,15 +239,73 @@ export class QuranService {
     return response;
   }
 
-  async getVersesByKey(verseKey: string): Promise<{ verse: Verse }> {
+  async getLanguages(): Promise<{ languages: LanguageOption[] }> {
+    if (this.languagesCache && Date.now() < this.languagesCache.expiresAt) {
+      return this.languagesCache.data;
+    }
+
+    const [languagesResponse, translationsResponse] = await Promise.all([
+      this.quranRequest<{ languages: QfLanguage[] }>({
+        url: '/resources/languages',
+        method: 'GET',
+      }),
+      this.quranRequest<{ translations: QfTranslationResource[] }>({
+        url: '/resources/translations',
+        method: 'GET',
+      }),
+    ]);
+
+    const translationsByLanguage = new Map<string, QfTranslationResource>();
+    for (const translation of translationsResponse.translations ?? []) {
+      const key = translation.language_name.toLowerCase();
+      if (!translationsByLanguage.has(key)) {
+        translationsByLanguage.set(key, translation);
+      }
+    }
+
+    const languages = (languagesResponse.languages ?? [])
+      .map(language => {
+        const translation =
+          translationsByLanguage.get(language.name.toLowerCase()) ??
+          translationsByLanguage.get(language.iso_code.toLowerCase());
+
+        if (!translation) {
+          return null;
+        }
+
+        return {
+          id: language.id,
+          name: language.name,
+          native_name: language.native_name,
+          iso_code: language.iso_code,
+          direction: language.direction,
+          defaultTranslation: {
+            id: translation.id,
+            name: translation.name,
+            author_name: translation.author_name,
+          },
+        } satisfies LanguageOption;
+      })
+      .filter((language): language is LanguageOption => language !== null)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const data = { languages };
+    this.languagesCache = { data, expiresAt: Date.now() + LANGUAGES_CACHE_MS };
+    return data;
+  }
+
+  async getVersesByKey(
+    verseKey: string,
+    translationId?: number,
+  ): Promise<{ verse: Verse }> {
     const response = await this.quranRequest<{ verse: Verse }>({
       url: `/verses/by_key/${verseKey}`,
       method: 'GET',
       params: {
         fields: 'text_uthmani,chapter_id',
         audio: '7',
-        translations: '85',
-        translation_fields: 'text,id,language_name',
+        translations: String(translationId ?? DEFAULT_TRANSLATION_ID),
+        translation_fields: 'text,id,language_name,resource_name',
       },
     });
 
