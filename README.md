@@ -65,11 +65,10 @@ OPENROUTER_API_KEY=your-openrouter-key
 # OPENROUTER_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
 # OPENROUTER_FALLBACK_MODEL=openai/gpt-4o-mini
 
-# User auth (login + bookmarks)
+# User auth (login + bookmarks + preferences)
 QF_USER_REDIRECT_URI=https://quran-chrome-extension-api.vercel.app/auth/quran/callback
 APP_SESSION_SECRET=your-32-char-random-secret
-UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your-upstash-token
+DATABASE_URL=postgresql://user:password@host/db?sslmode=require
 ```
 
 ### User Auth / Bookmarks (`/auth/quran/*` and `/user/*`)
@@ -82,7 +81,7 @@ UPSTASH_REDIS_REST_TOKEN=your-upstash-token
 - **`QF_USER_AUTH_BASE_URL`** (optional): QF OAuth base URL. Default: `https://oauth2.quran.foundation`.
 - **`QF_USER_API_BASE_URL`** (optional): QF User API base URL. Default: `https://apis.quran.foundation`.
 - **`APP_SESSION_SECRET`**: Random secret (≥32 chars) used for session ID generation. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-- **`UPSTASH_REDIS_REST_URL`** / **`UPSTASH_REDIS_REST_TOKEN`**: Upstash Redis REST credentials. Create a free database at [console.upstash.com](https://console.upstash.com). Without these, the server falls back to in-memory storage (local dev only — not suitable for production).
+- **`DATABASE_URL`**: Neon Postgres connection string for the OAuth session store (PKCE state, sessions, extState mapping). Create a free project at [neon.tech](https://neon.tech). Without this in production, the server will not start. Local dev falls back to in-memory storage when unset.
 
 ## Deploying to Vercel
 
@@ -123,6 +122,39 @@ npm run start:prod
 ```
 
 By default the API listens on `http://localhost:3000`.
+
+## Docker (local backend + Postgres)
+
+Run the API with a local Postgres database (migrations run automatically on startup):
+
+1. Copy `.env.example` to `.env` and fill in your Quran Foundation / Gemini secrets.
+2. Start the stack:
+
+```bash
+docker compose up --build
+```
+
+- **API:** http://localhost:3000
+- **Postgres:** `localhost:5432` (user/password/db: `dailyquran`)
+- **`DATABASE_URL`** is set by Compose to point at the `db` service; your `.env` value is overridden for the container.
+
+Useful commands:
+
+```bash
+# Run in background
+docker compose up --build -d
+
+# View logs
+docker compose logs -f api
+
+# Stop and remove containers (keeps the Postgres volume)
+docker compose down
+
+# Stop and remove containers + database volume
+docker compose down -v
+```
+
+`GEMINI_API_KEY` is still required — the Tafsir module initializes at startup even if you only test auth or verse routes.
 
 ### CORS and Chrome extension integration
 
