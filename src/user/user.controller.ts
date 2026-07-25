@@ -92,7 +92,7 @@ export class UserController {
     @Req() req: AuthenticatedRequest,
   ) {
     this.validateSecret(secret);
-    return this.userService.getPreferences(req.sessionData.accessToken);
+    return this.userService.getPreferences(req.sessionData.sub);
   }
 
   @Put('preferences')
@@ -107,7 +107,7 @@ export class UserController {
       throw new BadRequestException('translationId and languageIso are required');
     }
     return this.userService.updateTranslationPreference(
-      req.sessionData.accessToken,
+      req.sessionData.sub,
       body.translationId,
       body.languageIso,
     );
