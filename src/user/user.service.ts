@@ -1,6 +1,7 @@
 import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { QfOAuthService } from '../auth/qf-oauth.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface BookmarkBody {
   type: 'ayah';
@@ -22,21 +23,6 @@ export interface UserTranslationPreference {
   languageIso?: string;
 }
 
-interface QfPreferencesResponse {
-  success?: boolean;
-  data?: {
-    translations?: {
-      selectedTranslations?: number[];
-    };
-    language?: {
-      language?: string;
-    };
-    reading?: {
-      selectedReadingTranslation?: string;
-    };
-  };
-}
-
 const QURAN_COM_MUSHAF_ID = 4;
 /** Virtual Favorites collection used by Quran.com — no custom collection create needed. */
 const DEFAULT_COLLECTION_ID = '__default__';
@@ -51,7 +37,10 @@ interface QfCollectionItemsResponse {
 export class UserService {
   private readonly logger = new Logger(UserService.name);
 
-  constructor(private readonly oauthService: QfOAuthService) {}
+  constructor(
+    private readonly oauthService: QfOAuthService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   private headers(accessToken: string) {
     return {
@@ -244,61 +233,30 @@ export class UserService {
     }
   }
 
-  extractTranslationPreference(data: QfPreferencesResponse['data']): UserTranslationPreference {
-    const translationId =
-      data?.translations?.selectedTranslations?.[0] ??
-      (data?.reading?.selectedReadingTranslation
-        ? Number.parseInt(data.reading.selectedReadingTranslation, 10)
-        : undefined);
-
+  /**
+   * Translation/language preferences are stored in our own database rather than
+   * via Quran Foundation's `/v1/preferences` API, since our OAuth client is not
+   * approved for the `preference` scope. Keyed by the QF `sub` (stable user id).
+   */
+  async getPreferences(sub: string): Promise<UserTranslationPreference> {
+    const preference = await this.prisma.userPreference.findUnique({ where: { sub } });
     return {
-      translationId: Number.isNaN(translationId) ? undefined : translationId,
-      languageIso: data?.language?.language,
+      translationId: preference?.translationId,
+      languageIso: preference?.languageIso,
     };
   }
 
-  async getPreferences(accessToken: string): Promise<UserTranslationPreference> {
-    const url = `${this.oauthService.userApiBase}/v1/preferences`;
-
-    try {
-      const response = await axios.get<QfPreferencesResponse>(url, {
-        headers: this.headers(accessToken),
-      });
-      return this.extractTranslationPreference(response.data.data);
-    } catch (err) {
-      this.handleError(err, 'getPreferences');
-    }
-  }
-
   async updateTranslationPreference(
-    accessToken: string,
+    sub: string,
     translationId: number,
     languageIso: string,
   ): Promise<UserTranslationPreference> {
-    const url = `${this.oauthService.userApiBase}/v1/bulk-preferences`;
+    await this.prisma.userPreference.upsert({
+      where: { sub },
+      create: { sub, translationId, languageIso },
+      update: { translationId, languageIso },
+    });
 
-    try {
-      await axios.post(
-        url,
-        {
-          preferences: {
-            translations: {
-              selectedTranslations: [translationId],
-            },
-            language: {
-              language: languageIso,
-            },
-            reading: {
-              selectedReadingTranslation: String(translationId),
-            },
-          },
-        },
-        { headers: this.headers(accessToken) },
-      );
-
-      return { translationId, languageIso };
-    } catch (err) {
-      this.handleError(err, 'updateTranslationPreference');
-    }
+    return { translationId, languageIso };
   }
 }

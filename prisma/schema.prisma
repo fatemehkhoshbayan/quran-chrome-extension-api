@@ -47,3 +47,12 @@ model AiUsageLog {
   @@index([sub, createdAt])
   @@map("ai_usage_log")
 }
+
+model UserPreference {
+  sub           String   @id
+  translationId Int
+  languageIso   String
+  updatedAt     DateTime @updatedAt
+
+  @@map("user_preferences")
+}
