@@ -95,6 +95,8 @@ export class UserController {
     return this.userService.getPreferences(req.sessionData.sub);
   }
 
+  /** POST is preferred — PUT was blocked by older CORS configs that omitted it. */
+  @Post('preferences')
   @Put('preferences')
   @UseGuards(SessionAuthGuard)
   async updatePreferences(
