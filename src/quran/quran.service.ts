@@ -228,28 +228,28 @@ export class QuranService {
     if (!verse.translations?.length) return;
 
     const englishId = Number(DEFAULT_TRANSLATION_ID);
-    const matchesResource = (
-      translation: NonNullable<Verse['translations']>[number],
-      resourceId: number,
-    ) =>
-      translation.resource_id === resourceId || translation.id === resourceId;
+    const isEnglish = (t: NonNullable<Verse['translations']>[number]) =>
+      t.resource_id === englishId || t.language_name?.toLowerCase() === 'english';
 
-    const english =
-      verse.translations.find(t => matchesResource(t, englishId)) ??
-      verse.translations.find(t => t.language_name?.toLowerCase() === 'english');
-
+    const english = verse.translations.find(isEnglish);
     const preferred =
       preferredTranslationId != null && preferredTranslationId !== englishId
         ? (verse.translations.find(
-            t => t !== english && matchesResource(t, preferredTranslationId),
-          ) ?? verse.translations.find(t => t !== english))
+            t => !isEnglish(t) && t.resource_id === preferredTranslationId,
+          ) ?? verse.translations.find(t => !isEnglish(t)))
         : undefined;
 
-    const ordered = [english, preferred].filter(
-      (t): t is NonNullable<typeof t> => Boolean(t),
-    );
-    if (ordered.length > 0) {
-      verse.translations = ordered;
+    if (english && preferred) {
+      verse.translations = [english, preferred];
+    } else if (english) {
+      verse.translations = [english];
+    } else if (preferred) {
+      // Prefer keeping every returned translation so English is never dropped
+      // when we couldn't identify it by resource_id / language_name.
+      verse.translations = [
+        ...verse.translations.filter(t => t !== preferred),
+        preferred,
+      ];
     }
   }
 
