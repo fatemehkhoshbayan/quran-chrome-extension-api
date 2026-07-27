@@ -54,7 +54,7 @@ function setupApp(app: INestApplication) {
         cb(null, false);
       }
     },
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'extension_secret', 'Accept', 'x-session-token'],
     maxAge: 86400,
   });
