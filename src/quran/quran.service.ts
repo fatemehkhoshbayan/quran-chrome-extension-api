@@ -204,6 +204,55 @@ export class QuranService {
     }
   }
 
+  /**
+   * Always include English (DEFAULT_TRANSLATION_ID). When a preferred
+   * translation differs, request it as a second translation so the UI can
+   * show English as primary and the preference as secondary.
+   */
+  private buildTranslationsParam(preferredTranslationId?: number): string {
+    const englishId = Number(DEFAULT_TRANSLATION_ID);
+    if (
+      preferredTranslationId == null ||
+      preferredTranslationId === englishId ||
+      Number.isNaN(preferredTranslationId)
+    ) {
+      return DEFAULT_TRANSLATION_ID;
+    }
+    return `${DEFAULT_TRANSLATION_ID},${preferredTranslationId}`;
+  }
+
+  private orderTranslations(
+    verse: Verse,
+    preferredTranslationId?: number,
+  ): void {
+    if (!verse.translations?.length) return;
+
+    const englishId = Number(DEFAULT_TRANSLATION_ID);
+    const matchesResource = (
+      translation: NonNullable<Verse['translations']>[number],
+      resourceId: number,
+    ) =>
+      translation.resource_id === resourceId || translation.id === resourceId;
+
+    const english =
+      verse.translations.find(t => matchesResource(t, englishId)) ??
+      verse.translations.find(t => t.language_name?.toLowerCase() === 'english');
+
+    const preferred =
+      preferredTranslationId != null && preferredTranslationId !== englishId
+        ? (verse.translations.find(
+            t => t !== english && matchesResource(t, preferredTranslationId),
+          ) ?? verse.translations.find(t => t !== english))
+        : undefined;
+
+    const ordered = [english, preferred].filter(
+      (t): t is NonNullable<typeof t> => Boolean(t),
+    );
+    if (ordered.length > 0) {
+      verse.translations = ordered;
+    }
+  }
+
   async getRandomVerse(translationId?: number): Promise<{ verse: Verse }> {
     const response = await this.quranRequest<{ verse: Verse }>({
       url: '/verses/random',
@@ -211,13 +260,14 @@ export class QuranService {
       params: {
         fields: 'text_uthmani,chapter_id',
         audio: '7',
-        translations: String(translationId ?? DEFAULT_TRANSLATION_ID),
-        translation_fields: 'text,id,language_name,resource_name',
+        translations: this.buildTranslationsParam(translationId),
+        translation_fields: 'text,id,language_name,resource_name,resource_id',
       },
     });
 
     if (response?.verse) {
       this.attachChapterName(response.verse);
+      this.orderTranslations(response.verse, translationId);
       await this.attachTafsir(response.verse);
     }
 
@@ -304,13 +354,14 @@ export class QuranService {
       params: {
         fields: 'text_uthmani,chapter_id',
         audio: '7',
-        translations: String(translationId ?? DEFAULT_TRANSLATION_ID),
-        translation_fields: 'text,id,language_name,resource_name',
+        translations: this.buildTranslationsParam(translationId),
+        translation_fields: 'text,id,language_name,resource_name,resource_id',
       },
     });
 
     if (response?.verse) {
       this.attachChapterName(response.verse);
+      this.orderTranslations(response.verse, translationId);
       await this.attachTafsir(response.verse);
     }
 
