@@ -5,7 +5,8 @@ export interface VerseAudio {
 
 export interface VerseTranslation {
   id: number;
-  resource_name: number;
+  resource_id?: number;
+  resource_name?: string | number;
   text: string;
   language_name: string;
 }
