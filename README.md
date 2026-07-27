@@ -99,7 +99,15 @@ GEMINI_API_KEY=...
 3. Deploy (`git push` to `main`, or `npx vercel --prod`).
 4. Point the extension’s `VITE_API_URL` at the production host and keep `EXTENSION_SECRET` in sync.
 
-Migrations run via Prisma (`prisma migrate deploy`) on Docker startup; on Vercel, run migrate as part of your deploy/build process or once against Neon after schema changes.
+**Database migrations on deploy:** the `build` script runs `prisma migrate deploy` before compiling. Any new files under `prisma/migrations/` are applied to Neon automatically whenever Vercel builds (Production and Preview), as long as `DATABASE_URL` is set for that environment. Use `prisma migrate deploy` only — never `migrate dev` on Vercel.
+
+Locally / one-off:
+
+```bash
+npm run prisma:migrate   # same as: npx prisma migrate deploy
+```
+
+Docker Compose already runs migrations on container start via `docker-entrypoint.sh`.
 
 ## Installation & run
 
